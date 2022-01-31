@@ -70,6 +70,11 @@ struct scrVectorLua
 		: x(x), y(y), z(z)
 	{
 	}
+
+	scrVectorLua(const rage::scrVec3N& copy)
+		: x(copy.x), y(copy.y), z(copy.z)
+	{
+	}
 };
 
 template<bool IsPtr>

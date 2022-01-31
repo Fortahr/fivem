@@ -1094,6 +1094,16 @@ LUA_INLINE void LuaArgumentParser::PushObject<const scrVectorLua&>(lua_State* L,
 }
 
 template<>
+LUA_INLINE void LuaArgumentParser::PushObject<const rage::scrVec3N&>(lua_State* L, const rage::scrVec3N& val)
+{
+#if LUA_VERSION_NUM == 504
+	glm_pushvec3(L, glm::vec<3, glm_Float>(val.x, val.y, val.z));
+#else
+	lua_pushvector3(L, val.x, val.y, val.z);
+#endif
+}
+
+template<>
 LUA_INLINE void LuaArgumentParser::PushObject<const scrObject&>(lua_State* L, const scrObject& val)
 {
 	// @NOTE: Prevent scripts that override msgpack.unpack() from
@@ -1274,6 +1284,11 @@ struct LuaNativeContext
 	LUA_INLINE TVal GetResult()
 	{
 		return *(TVal*)(&arguments[0]);
+	}
+
+	LUA_INLINE const rage::scrVec3N& GetVectorResult(size_t index)
+	{
+		return rawCxt.GetVector()[index];
 	}
 
 	template<typename TVal>

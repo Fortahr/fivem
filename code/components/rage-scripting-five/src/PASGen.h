@@ -6466,6 +6466,7 @@ rage::scrEngine::RegisterNativeHandler(0xf6b815c5, [](rage::scrNativeCallContext
 });
         
 // GET_ENTITY_MATRIX
+/*
 static auto nh_0xECB2FC7235A7D137 = rage::scrEngine::GetNativeHandler(0xECB2FC7235A7D137);
 rage::scrEngine::RegisterNativeHandler(0xECB2FC7235A7D137, [](rage::scrNativeCallContext* cxt)
 {
@@ -6475,7 +6476,7 @@ rage::scrEngine::RegisterNativeHandler(0xECB2FC7235A7D137, [](rage::scrNativeCal
 	if (!ValidateArg(cxt->GetArgument<void*>(4))) { return; }
 
     nh_0xECB2FC7235A7D137(cxt);
-});
+});*/
         
 // GET_ENTITY_PLAYER_IS_FREE_AIMING_AT
 static auto nh_0x2975C866E6713290 = rage::scrEngine::GetNativeHandler(0x2975C866E6713290);
