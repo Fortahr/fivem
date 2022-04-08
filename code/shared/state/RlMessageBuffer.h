@@ -354,10 +354,9 @@ public:
 			length = 16;
 		}
 
-		auto a1 = m_data.data();
-		auto a2 = *(uint32_t*)data;
-		auto a3 = length;
-		int a4 = m_curBit;
+		char* write = (char*)m_data.data();
+		auto first4Bytes = *(uint32_t*)data;										// 0000 0000 0000 0000 0000 0000 0010 1001    = data(0x29)
+		int writeBitOffset = m_curBit;												// 81
 
 		if ((m_curBit + length) > m_maxBit)
 		{
@@ -366,41 +365,34 @@ public:
 
 		m_curBit += length;
 
-		int64_t v4; // r10
-		int v5; // er9
-		uint8_t *v6; // r10
-		unsigned int v7; // er11
-		uint64_t result; // rax
-		unsigned int v9; // er11
-		unsigned int v10; // ebx
-		uint8_t *v11; // r10
-		uint64_t v12; // rdx
-		unsigned int v13; // eax
-		int v14; // ecx
+		int shiftBits = 32 - length;												// 26    = 32 - 6
+		int shiftMask = ~0 << shiftBits;											// 1111 1111 0000 0000 0000 0000 0000 0000    = ~0 << 24
 
-		v4 = (int64_t)a4 >> 3;
-		v5 = a4 & 7;
-		v6 = (uint8_t *)(a1 + v4);
-		v7 = a2 << (32 - a3);
-		result = v7 >> 24 >> v5;
-		v9 = v7 << (8 - v5);
-		v10 = -1 << (32 - a3) << (8 - v5);
-		*v6 = result | *v6 & ~(uint8_t)((unsigned int)(-1 << (32 - a3)) >> 24 >> v5);
-		v11 = v6 + 1;
-		if (8 - v5 < a3)
+		int offsetRemainder = writeBitOffset % 8;									// 1    = 81 % 8
+		int eightMinusRemainder = 8 - offsetRemainder;								// 7    = 8 - 1
+
+		uint32_t alignDataInHighBits = first4Bytes << shiftBits;					// 1010 0100 0000 0000 0000 0000 0000 0000    = data(0x29) << 26
+		uint32_t result = alignDataInHighBits >> 24;								// 0000 0000 0000 0000 0000 0000 1010 0100    = above >> 24
+		result >>= offsetRemainder;													// 0000 0000 0000 0000 0000 0000 0101 0010    = above >> 1
+
+		write += writeBitOffset / 8;
+		*write = result | *write & ~uint8_t(shiftMask >> 24 >> offsetRemainder);	// 0000 0000 0000 0000 0000 0000 1010 0100 | prevValue & ~(0111 1111)
+		++write;
+
+		result = alignDataInHighBits << eightMinusRemainder;						// 0000 0000 0000 0000 0010 1001 0000 0000    = alignDataInHighBits << 7
+		shiftMask <<= eightMinusRemainder;											// 1000 0000 0000 0000 0000 0000 0000 0000    = shiftMask << 7
+
+		if (eightMinusRemainder < length)											// true    = 7 < 6
 		{
-			v12 = ((unsigned int)(a3 - (8 - v5) - 1) >> 3) + 1;
-			do
+			for (size_t v12 = (length - eightMinusRemainder - 1) * 8 + 1; v12 > 0; --v12)
 			{
-				v13 = v9;
-				v9 <<= 8;
-				result = v13 >> 24;
-				v14 = (uint64_t)v10 >> 24;
-				v10 <<= 8;
-				*v11 = result | *v11 & ~(uint8_t)v14;
-				++v11;
-				--v12;
-			} while (v12);
+				result <<= 8;
+				shiftMask <<= 8;
+
+				*write = result >> 24 | *write & ~uint8_t(shiftMask >> 24);
+
+				++write;
+			}
 		}
 
 		return true;
