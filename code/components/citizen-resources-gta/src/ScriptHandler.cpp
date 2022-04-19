@@ -63,7 +63,9 @@ class TestScriptThread : public GtaThread
 
 		if (tickCount == 10)
 		{
-			Instance<ICoreGameInit>::Get()->SetVariable("gameSettled");
+			auto* coreGameInit = Instance<ICoreGameInit>::Get();
+			coreGameInit->SetVariable("gameSettled");
+			coreGameInit->OnScriptsInitialized();
 		}
 
 		g_resourceManager->Tick();

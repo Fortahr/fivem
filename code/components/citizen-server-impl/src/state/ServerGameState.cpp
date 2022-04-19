@@ -3703,6 +3703,34 @@ void ServerGameState::ParseClonePacket(const fx::ClientSharedPtr& client, net::B
 	}
 }
 
+void ServerGameState::ParseClientState(const fx::ClientSharedPtr& client, net::Buffer& buffer)
+{
+	switch(buffer.Read<uint32_t>())
+	{
+	case HashString("initialized"):
+		{
+			auto data = std::static_pointer_cast<GameStateClientData>(client->GetSyncData());
+			if (!data->initialized)
+			{
+				data->initialized = true;
+
+				auto eventManager = m_instance->GetComponent<fx::ResourceManager>()->GetComponent<fx::ResourceEventManagerComponent>();
+
+				/*NETEV playerJoined SERVER
+			/#*
+			 * A server-side event that is triggered when a player has loaded all initial scripts and is ready to play and listen to events.
+			 *
+			 * @param source - The player's NetID (a number in Lua/JS), **not a real argument, use [FromSource] or source**.
+			 #/
+			declare function playerJoined(source: string): void;
+			*/
+				eventManager->TriggerEvent2("playerJoined", { "internal-net:" + std::to_string(client->GetNetId()) });
+			}
+			break;
+		}
+	}
+}
+
 void ServerGameState::SendObjectIds(const fx::ClientSharedPtr& client, int numIds)
 {
 	// first, gather IDs
@@ -4050,10 +4078,17 @@ void ServerGameState::AttachToObject(fx::ServerInstanceBase* instance)
 
 	m_lockdownModeVar = instance->AddVariable<fx::EntityLockdownMode>("sv_entityLockdown", ConVar_None, m_entityLockdownMode, &m_entityLockdownMode);
 
+	auto handlerMapComponent = instance->GetComponent<fx::GameServer>()->GetComponent<fx::HandlerMapComponent>();
+	handlerMapComponent->Add(HashRageString("netClientState"), { fx::ThreadIdx::Sync, [this](const fx::ClientSharedPtr& client, net::Buffer& buffer)
+	{
+		this->ParseClientState(client, buffer);
+	} });
+
+	// state bags
 	auto sbac = fx::StateBagComponent::Create(fx::StateBagRole::Server);
 	sbac->SetGameInterface(this);
 
-	instance->GetComponent<fx::GameServer>()->GetComponent<fx::HandlerMapComponent>()->Add(HashRageString("msgStateBag"), 
+	handlerMapComponent->Add(HashRageString("msgStateBag"), 
 		{ fx::ThreadIdx::Sync, [sbac](const fx::ClientSharedPtr& client, net::Buffer& buffer) {
 		if (client->GetSlotId() != -1)
 		{

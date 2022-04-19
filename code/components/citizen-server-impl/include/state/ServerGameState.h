@@ -1019,7 +1019,8 @@ struct GameStateClientData : public sync::ClientSyncDataBase
 
 	std::optional<int> playerId;
 
-	bool syncing;
+	bool syncing : 1;
+	bool initialized : 1;
 
 	glm::mat4x4 viewMatrix{};
 
@@ -1054,7 +1055,7 @@ struct GameStateClientData : public sync::ClientSyncDataBase
 	}
 
 	GameStateClientData()
-		: syncing(false)
+		: syncing(false), initialized(false)
 	{
 	}
 
@@ -1141,6 +1142,8 @@ private:
 	void ParseClonePacket(const fx::ClientSharedPtr& client, net::Buffer& buffer);
 
 	void ParseAckPacket(const fx::ClientSharedPtr& client, net::Buffer& buffer);
+
+	void ParseClientState(const fx::ClientSharedPtr& client, net::Buffer& buffer);
 
 	bool ValidateEntity(EntityLockdownMode entityLockdownMode, const fx::sync::SyncEntityPtr& entity);
 

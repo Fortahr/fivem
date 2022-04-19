@@ -101,6 +101,8 @@ public:
 
 	fwEvent<> OnGameFinalizeLoad;
 
+	fwEvent<> OnScriptsInitialized;
+
 	fwEvent<> OnGameRequestLoad;
 
 	fwEvent<> OnShutdownSession;

@@ -435,6 +435,15 @@ void CloneManagerLocal::BindNetLibrary(NetLibrary* netLibrary)
 
 	icgi = Instance<ICoreGameInit>::Get();
 
+	// Let server know we're ready to game!
+	// #TODO: like below, shutdown logic (disconnect)?
+	icgi->OnScriptsInitialized.Connect([&net = m_netLibrary]()
+	{
+		net::Buffer buf(4);
+		buf.Write(HashString("initialized"));
+		net->SendReliableCommand("netClientState", reinterpret_cast<const char*>(buf.GetBuffer()), buf.GetLength());
+	});
+
 	// #TODO: shutdown session logic!!
 	auto sbac = fx::StateBagComponent::Create(fx::StateBagRole::Client);
 	m_globalBag = sbac->RegisterStateBag("global");
