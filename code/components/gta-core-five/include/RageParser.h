@@ -60,6 +60,18 @@ namespace rage
 		const char** names; // NULL if there are no names
 	};
 
+	class parStructure;
+	class parMemberDefinition;
+
+	struct parStructureStatic
+	{
+		uint32_t name;
+		uint8_t pad[20];
+		parMemberDefinition** membersData;
+		uint32_t* membersOffsets;
+		char pad2[16];
+	};
+
 	enum class parArrayType : uint8_t
 	{
 		// type is atArray
@@ -99,8 +111,6 @@ namespace rage
 		Struct_3 = 3,
 		Struct_4 = 4,
 	};
-
-	class parStructure;
 
 	struct parMemberDefinition
 	{

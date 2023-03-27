@@ -26,7 +26,7 @@ enum flashlightFlags_t : uint8_t
 	FLASHLIGHT_UNK3				= (1 << 4), // Spammed On/Off, unsure what it's for.
 };
 
-class CWeaponComponentFlashlight
+class CWeaponComponentFlashLight
 {
 public:
 	void* vtable;
@@ -91,12 +91,12 @@ static hook::cdecl_stub<CPed*()> getLocalPlayerPed([]()
 	return hook::get_call( addr );
 });
 
-typedef void (*flashlightProcessFn)(CWeaponComponentFlashlight*, CPed*);
+typedef void (*flashlightProcessFn)(CWeaponComponentFlashLight*, CPed*);
 static flashlightProcessFn origFlashlightProcess;
 
 static std::atomic_bool g_SET_FLASH_LIGHT_KEEP_ON_WHILE_MOVING = false;
 
-static void Flashlight_Process(CWeaponComponentFlashlight* thisptr, CPed* ped)
+static void Flashlight_Process(CWeaponComponentFlashLight* thisptr, CPed* ped)
 {
 	// Copy every flag except for FLASHLIGHT_ON which is 1
 	// 80 63 49 FE          and     byte ptr [rbx+49h], 0FEh
