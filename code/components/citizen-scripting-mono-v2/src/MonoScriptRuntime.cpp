@@ -1,5 +1,6 @@
 #include "StdInc.h"
 #include "MonoScriptRuntime.h"
+#include "ExternalFunctions/ExternalManager.h"
 
 #include "MonoComponentHost.h"
 #include "MonoDomainScope.h"
@@ -159,6 +160,8 @@ void MonoScriptRuntime::InitializeMethods(MonoImage* image)
 	m_callRef = Method::Find(image, "CitizenFX.Core.ScriptInterface:CallRef");
 	m_duplicateRef = Method::Find(image, "CitizenFX.Core.ScriptInterface:DuplicateRef");
 	m_removeRef = Method::Find(image, "CitizenFX.Core.ScriptInterface:RemoveRef");
+
+	m_invokeExport = Method::Find(image, "CitizenFX.Core.ScriptInterface:InvokeExport");
 }
 
 result_t MonoScriptRuntime::Destroy()
@@ -496,6 +499,46 @@ bool MonoScriptRuntime::ReadAssembly(MonoString* name, MonoArray** assembly, Mon
 	mono_raise_exception(mono_get_exception_file_not_found(name));
 
 	return false;
+}
+
+StatusCode MonoScriptRuntime::InvokeExport(PrivateId privateId, std::string_view argumentData, const char*& resultData, size_t& resultSize, AsyncResultId asyncResultId)
+{
+	trace("WEEEEEEEEEEEE InvokeExport\n");
+
+	fx::PushEnvironment env(this);
+	MonoComponentHost::EnsureThreadAttached();
+	MonoDomainScope scope(m_appDomain);
+
+	MonoException* exc = nullptr;
+	StatusCode result = (StatusCode)m_invokeExport(privateId, argumentData.data(), argumentData.size(), nullptr, nullptr, asyncResultId, &exc);
+	
+	if (exc == nullptr)
+		return result;
+
+	MonoComponentHostShared::PrintException((MonoObject*)exc, false);
+	return StatusCode::FAILED;
+}
+
+void MonoScriptRuntime::AsyncResult(PrivateId privateId, std::string_view argumentData, AsyncResultId asyncResultId)
+{
+	trace("WEEEEEEEEEEEE AsyncResult\n");
+}
+
+void MonoScriptRuntime::RegisterExport(MonoString* exportName, size_t privateId, size_t binding)
+{
+	trace("WEEEEEEEEEEEE RegisterExport\n");
+	ExternalFunctions::GetManager().RegisterExport(*this, m_resourceName, mono::UTF8CString(exportName), privateId, (Binding)binding);
+}
+
+uint8_t MonoScriptRuntime::InvokeExternalExport(MonoString* resourceName, MonoString* exportName, MonoArray* arguments, const char*& resultData, size_t& resultSize, uint64_t& asyncResultId)
+{
+	trace("WEEEEEEEEEEEE InvokeExternalExport\n");	
+	ExternalFunctions::GetManager().InvokeExportFromLocal(
+		ExternalFunctions::AsyncResultId::SERVER, UTF8CString(resourceName), mono::UTF8CString(exportName),
+		std::string_view(mono_array_addr_with_size(arguments, 0, 0), mono_array_length(arguments)),
+		resultData, resultSize, *this, (AsyncResultId&)asyncResultId);
+
+	return (uint8_t)StatusCode::SUCCESSFUL;
 }
 
 // {C068E0AB-DD9C-48F2-A7F3-69E866D27F17} = v1

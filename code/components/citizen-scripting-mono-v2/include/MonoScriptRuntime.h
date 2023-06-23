@@ -12,6 +12,8 @@
 #include <deque>
 
 #include <fxScripting.h>
+#include <ExternalFunctions/IScriptRuntimeExternalFunctions.h>
+
 #include <Resource.h>
 #include <ManifestVersion.h>
 
@@ -22,7 +24,7 @@
 namespace fx::mono
 {
 class MonoScriptRuntime : public fx::OMClass<MonoScriptRuntime, IScriptRuntime, IScriptFileHandlingRuntime, IScriptTickRuntimeWithBookmarks,
-	IScriptEventRuntime, IScriptRefRuntime, IScriptMemInfoRuntime, /*IScriptStackWalkingRuntime,*/ IScriptDebugRuntime, IScriptProfiler>
+	IScriptEventRuntime, IScriptRefRuntime, IScriptMemInfoRuntime, /*IScriptStackWalkingRuntime,*/ IScriptRuntimeExternalFunctions, IScriptDebugRuntime, IScriptProfiler>
 {
 private:
 	int m_instanceId;
@@ -53,6 +55,8 @@ private:
 	Thunk<uint32_t(int32_t refIndex, char* argsSerialized, uint32_t argsSize, char** retvalSerialized, uint32_t* retvalSize, uint64_t gameTime, bool profiling)> m_callRef;
 	Thunk<void(int32_t refIndex, int32_t* newRefIdx)> m_duplicateRef = nullptr;
 	Thunk<void(int32_t refIndex)> m_removeRef = nullptr;
+
+	Thunk<uint8_t(size_t privateId, const char* arguments, size_t argumentsSize, const char** result, size_t* resultSize, size_t asyncResultId)> m_invokeExport = nullptr;
 
 	Thunk<int64_t()> m_getMemoryUsage = nullptr;
 	Thunk<void()> m_startProfiling = nullptr;
@@ -86,6 +90,11 @@ public:
 	NS_DECL_ISCRIPTMEMINFORUNTIME;
 
 	// NS_DECL_ISCRIPTSTACKWALKINGRUNTIME;
+	 
+	NS_DECL_ISCRIPTRUNTIME_EXTERNALFUNCTIONS;
+
+	void RegisterExport(MonoString* exportName, size_t privateId, size_t binding);
+	uint8_t InvokeExternalExport(MonoString* resourceName, MonoString* exportName, MonoArray* arguments, const char*& resultData, size_t& resultSize, uint64_t& asyncResultId);
 
 	NS_DECL_ISCRIPTDEBUGRUNTIME;
 

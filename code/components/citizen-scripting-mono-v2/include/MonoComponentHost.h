@@ -117,6 +117,8 @@ private:
 
 private:
 	static MonoArray* CanonicalizeRef(const MonoScriptRuntime* runTime, int referenceId);
+	static void RegisterExport(MonoScriptRuntime* runTime, MonoString* exportName, size_t privateId, size_t binding);
+	static uint8_t InvokeExternalExport(MonoScriptRuntime* runTime, MonoString* resourceName, MonoString* exportName, MonoArray* arguments, const char*& resultData, size_t& resultSize, uint64_t& asyncResultId);
 
 private:
 	static void InitializeMethods(MonoImage* image);
@@ -175,4 +177,15 @@ inline MonoArray* MonoComponentHost::CanonicalizeRef(const MonoScriptRuntime* ru
 {
 	return runTime->CanonicalizeRef(referenceId);
 }
+
+inline void MonoComponentHost::RegisterExport(MonoScriptRuntime* runTime, MonoString* exportName, size_t privateId, size_t binding)
+{
+	runTime->RegisterExport(exportName, privateId, binding);
+}
+
+inline uint8_t MonoComponentHost::InvokeExternalExport(MonoScriptRuntime* runTime, MonoString* resourceName, MonoString* exportName, MonoArray* arguments, const char*& resultData, size_t& resultSize, uint64_t& asyncResultId)
+{
+	return runTime->InvokeExternalExport(resourceName, exportName, arguments, resultData, resultSize, asyncResultId);
+}
+
 }

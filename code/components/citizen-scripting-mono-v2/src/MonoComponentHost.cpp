@@ -64,6 +64,8 @@ void MonoComponentHost::Initialize()
 
 	// reference functions
 	Method::AddInternalCall("CitizenFX.Core.ScriptInterface::CanonicalizeRef", MonoComponentHost::CanonicalizeRef);
+	Method::AddInternalCall("CitizenFX.Core.ScriptInterface::RegisterExport", MonoComponentHost::RegisterExport);
+	Method::AddInternalCall("CitizenFX.Core.ScriptInterface::InvokeExternalExport", MonoComponentHost::InvokeExternalExport);
 
 	// assemblies
 	Method::AddInternalCall("CitizenFX.Core.ScriptInterface::ReadAssembly", MonoComponentHost::ReadAssemblyUGC);

@@ -70,5 +70,10 @@ public:
 	{
 		return std::string(_data);
 	}
+
+	inline operator std::string_view() const
+	{
+		return std::string_view(_data, strlen(_data));
+	}
 };
 }

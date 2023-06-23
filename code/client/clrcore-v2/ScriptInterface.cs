@@ -66,6 +66,19 @@ namespace CitizenFX.Core
 		internal static unsafe byte[] CanonicalizeRef(int refId) => CanonicalizeRef(s_runtime, refId);
 
 		[SecurityCritical, MethodImpl(MethodImplOptions.InternalCall)]
+		private static extern unsafe void RegisterExport(UIntPtr runtime, string exportName, ulong privateId, ulong binding);
+		
+		[SecurityCritical]
+		internal static unsafe void RegisterExport(string exportName, ulong privateId, ulong binding) => RegisterExport(s_runtime, exportName, privateId, binding);
+
+		[SecurityCritical, MethodImpl(MethodImplOptions.InternalCall)]
+		private static extern unsafe byte InvokeExternalExport(UIntPtr runtime, string resourceName, string exportName, byte[] argumentData, out byte* result, out ulong resultSize, out ulong asyncRedultId);
+
+		[SecurityCritical]
+		internal static unsafe byte InvokeExternalExport(string resourceName, string exportName, byte[] argumentData, out byte* result, out ulong resultSize, out ulong asyncRedultId)
+			=> InvokeExternalExport(s_runtime, resourceName, exportName, argumentData, out result, out resultSize, out asyncRedultId);
+
+		[SecurityCritical, MethodImpl(MethodImplOptions.InternalCall)]
 		private static extern unsafe bool ReadAssembly(UIntPtr host, string file, out byte[] assembly, out byte[] symbols);
 
 		[SecurityCritical]
@@ -174,6 +187,28 @@ namespace CitizenFX.Core
 			ReferenceFunctionManager.DecrementReference(refIndex);
 		}
 
-#endregion
+		[SecurityCritical, SuppressMessage("System.Diagnostics.CodeAnalysis", "IDE0051", Justification = "Called by host")]
+		internal static unsafe byte InvokeExport(ulong privateId, byte* arguments, ulong argumentsSize, ref byte* result, ref ulong resultSize, ulong asyncResultId)
+		{
+			Debug.WriteLine("LALALALA");
+			
+			return 0;
+		}
+
+		#endregion
+	}
+
+	[SecuritySafeCritical]
+	public class RemoveMeTest
+	{
+		public static void RegisterExport(string exportName, ulong privateId, ulong binding)
+		{
+			ScriptInterface.RegisterExport(exportName, privateId, binding);
+		}
+
+		public static unsafe void InvokeExternalExport(string resourceName, string exportName, byte[] argumentData)
+		{
+			ScriptInterface.InvokeExternalExport(resourceName, exportName, argumentData, out var resultData, out ulong resultSize, out ulong asyncRedultId);
+		}
 	}
 }
