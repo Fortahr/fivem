@@ -64,8 +64,11 @@ void MonoComponentHost::Initialize()
 
 	// reference functions
 	Method::AddInternalCall("CitizenFX.Core.ScriptInterface::CanonicalizeRef", MonoComponentHost::CanonicalizeRef);
+
+	// externals
 	Method::AddInternalCall("CitizenFX.Core.ScriptInterface::RegisterExport", MonoComponentHost::RegisterExport);
 	Method::AddInternalCall("CitizenFX.Core.ScriptInterface::InvokeExternalExport", MonoComponentHost::InvokeExternalExport);
+	Method::AddInternalCall("CitizenFX.Core.ScriptInterface::OutgoingAsyncResult", MonoComponentHost::OutgoingAsyncResult);
 
 	// assemblies
 	Method::AddInternalCall("CitizenFX.Core.ScriptInterface::ReadAssembly", MonoComponentHost::ReadAssemblyUGC);
@@ -91,7 +94,10 @@ void MonoComponentHost::Initialize()
 
 		"CitizenFX.Core.ScriptInterface:CallRef",
 		"CitizenFX.Core.ScriptInterface:DuplicateRef",
-		"CitizenFX.Core.ScriptInterface:RemoveRef"
+		"CitizenFX.Core.ScriptInterface:RemoveRef",
+
+		"CitizenFX.Core.ScriptInterface:InvokeExport",
+		"CitizenFX.Core.ScriptInterface:AsyncResult",
 	};
 
 	// make sure all methods we'll be using are present for later, else we'll early out

@@ -162,6 +162,7 @@ void MonoScriptRuntime::InitializeMethods(MonoImage* image)
 	m_removeRef = Method::Find(image, "CitizenFX.Core.ScriptInterface:RemoveRef");
 
 	m_invokeExport = Method::Find(image, "CitizenFX.Core.ScriptInterface:InvokeExport");
+	m_asyncResult = Method::Find(image, "CitizenFX.Core.ScriptInterface:AsyncResult");
 }
 
 result_t MonoScriptRuntime::Destroy()
@@ -239,6 +240,12 @@ void* MonoScriptRuntime::GetParentObject()
 void MonoScriptRuntime::SetParentObject(void* ptr)
 {
 	m_parentObject = reinterpret_cast<fx::Resource*>(ptr);
+}
+
+// #TODO: make const correct
+Resource* MonoScriptRuntime::GetResource() const
+{
+	return m_parentObject;
 }
 
 // #TODO: make const correct
@@ -503,42 +510,47 @@ bool MonoScriptRuntime::ReadAssembly(MonoString* name, MonoArray** assembly, Mon
 
 StatusCode MonoScriptRuntime::InvokeExport(PrivateId privateId, std::string_view argumentData, const char*& resultData, size_t& resultSize, AsyncResultId asyncResultId)
 {
-	trace("WEEEEEEEEEEEE InvokeExport\n");
-
 	fx::PushEnvironment env(this);
 	MonoComponentHost::EnsureThreadAttached();
 	MonoDomainScope scope(m_appDomain);
 
 	MonoException* exc = nullptr;
-	StatusCode result = (StatusCode)m_invokeExport(privateId, argumentData.data(), argumentData.size(), nullptr, nullptr, asyncResultId, &exc);
-	
+	uint8_t status;
+	uint64_t nextTick = m_invokeExport(privateId, argumentData.data(), argumentData.size(), status, resultData, resultSize, asyncResultId, GetCurrentSchedulerTime(), IsProfiling(), &exc);
+	ScheduleTick(nextTick);
+
 	if (exc == nullptr)
-		return result;
+		return (StatusCode)status;
 
 	MonoComponentHostShared::PrintException((MonoObject*)exc, false);
 	return StatusCode::FAILED;
 }
 
-void MonoScriptRuntime::AsyncResult(PrivateId privateId, std::string_view argumentData, AsyncResultId asyncResultId)
+void MonoScriptRuntime::AsyncResult(AsyncResultId asyncResultId, uint8_t status, std::string_view argumentData)
 {
-	trace("WEEEEEEEEEEEE AsyncResult\n");
+	fx::PushEnvironment env(this);
+	MonoComponentHost::EnsureThreadAttached();
+	MonoDomainScope scope(m_appDomain);
+
+	MonoException* exc = nullptr;
+	uint64_t nextTick = m_asyncResult(asyncResultId, status, argumentData.data(), argumentData.size(), GetCurrentSchedulerTime(), IsProfiling(), &exc);
+	ScheduleTick(nextTick);
+
+	if (exc != nullptr)
+		MonoComponentHostShared::PrintException((MonoObject*)exc, false);
 }
 
 void MonoScriptRuntime::RegisterExport(MonoString* exportName, size_t privateId, size_t binding)
 {
-	trace("WEEEEEEEEEEEE RegisterExport\n");
-	ExternalFunctions::GetManager().RegisterExport(*this, m_resourceName, mono::UTF8CString(exportName), privateId, (Binding)binding);
+	ExternalFunctions::GetManager().RegisterExport(*this, mono::UTF8CString(exportName), privateId, (Binding)binding);
 }
 
 uint8_t MonoScriptRuntime::InvokeExternalExport(MonoString* resourceName, MonoString* exportName, MonoArray* arguments, const char*& resultData, size_t& resultSize, uint64_t& asyncResultId)
 {
-	trace("WEEEEEEEEEEEE InvokeExternalExport\n");	
-	ExternalFunctions::GetManager().InvokeExportFromLocal(
+	return (uint8_t)ExternalFunctions::GetManager().InvokeExportFromLocal(
 		ExternalFunctions::AsyncResultId::SERVER, UTF8CString(resourceName), mono::UTF8CString(exportName),
 		std::string_view(mono_array_addr_with_size(arguments, 0, 0), mono_array_length(arguments)),
 		resultData, resultSize, *this, (AsyncResultId&)asyncResultId);
-
-	return (uint8_t)StatusCode::SUCCESSFUL;
 }
 
 // {C068E0AB-DD9C-48F2-A7F3-69E866D27F17} = v1

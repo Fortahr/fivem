@@ -1,183 +1,185 @@
-#if REMOTE_FUNCTION_ENABLED
-using CitizenFX.Core.Native;
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Runtime.InteropServices;
+using System.Security;
 
 namespace CitizenFX.Core
 {
 	static class ExternalsManager
 	{
-		internal static string RpcRequestName { get; private set; }
-		internal static string RpcReplyName { get; private set; }
-
-		private static Dictionary<int, DynFunc> s_remoteFuncHandlers = new Dictionary<int, DynFunc>();
-#if IS_FXSERVER
-		private static Dictionary<string, HashSet<int>> s_playeRemoteHandlers = new Dictionary<string, HashSet<int>>();
-#endif
-
-		internal static void Initialize(string resourceName, int instanceId)
+		public enum StatusCode : byte
 		{
-			RpcRequestName = "__cfx_rpcReq:"+ resourceName;
-			RpcReplyName = "__cfx_rpcRep:" + resourceName;
+			SUCCESSFUL,
+			ASYNC,
+			REMOTE,
 
-			Native.CoreNatives.RegisterResourceAsEventHandler(RpcRequestName);
-			Native.CoreNatives.RegisterResourceAsEventHandler(RpcReplyName);
+			FUNCTION_INACCASSIBLE,
+			FUNCTION_NOT_FOUND,
+			RESOURCE_NOT_FOUND,
+			FAILED,
+		};
 
-#if IS_FXSERVER
-			EventManager.AddEventHandler("playerDropped", new DynFunc(OnPlayerDropped));
-#endif
-		}
+		private static readonly Dictionary<ulong, DynFunc> s_exports = new Dictionary<ulong, DynFunc>();
+		private static readonly Dictionary<ulong, Coroutine<dynamic>> s_asyncs = new Dictionary<ulong, Coroutine<dynamic>>();
+		private static readonly List<GCHandle> s_results = new List<GCHandle>();
 
-		internal static unsafe bool IncomingRequest(string eventName, string sourceString, Binding origin, byte* argsSerialized, int serializedSize, ref object[] args)
+		internal static unsafe StatusCode IncomingExport(ulong privateId, byte* arguments, ulong argumentsSize, ref byte* resultData, ref ulong resultSize, ulong asyncResultId)
 		{
-			// only accepted for remote, might change in the future
-			if (origin == Binding.REMOTE)
+			for (int i = 0; i < s_results.Count; ++i)
+				s_results[i].Free();
+
+			s_results.Clear();
+
+			if (s_exports.TryGetValue(privateId, out var dynFunc))
 			{
-				if (eventName == RpcRequestName)
-				{
-					args = MsgPackDeserializer.DeserializeArguments(argsSerialized, serializedSize, origin == Binding.Remote ? sourceString : null);
-					if (args.Length > 3 && args[2] is string requestId)
-					{
-						ulong rid = Convert.ToUInt64(requestId);
-
-						int id = (int)rid;
-
-						if (s_remoteFuncHandlers.TryGetValue(id, out var func)
-							&& args[3] is object[] requestArguments
-							&& args[1] is ulong replyId
-							&& args[0] is string resource)
-						{
-							object result = null;
-
-							try
-							{
-								result = func(requestArguments);
-							}
-							catch (Exception ex)
-							{
-								if (Debug.ShouldWeLogDynFuncError(ex, func))
-								{
-									string argsString = string.Join<string>(", ", args.Select(a => a.GetType().ToString()));
-									Debug.WriteLine($"^1Error while handling RPC request\n\twith arguments: ({argsString})^7");
-									Debug.PrintError(ex);
-								}
-							}
-
-							if (replyId != ulong.MaxValue) // requesting reply
-							{
-#if !IS_FXSERVER
-								Events.TriggerServerEvent($"__cfx_rpcRep:{resource}", replyId, new[] { result });
+#if IS_FXSERVER
+				Remote remote = new Remote((asyncResultId & 0xFFFF).ToString());
 #else
-								string player = (args[args.Length - 1] as Player).Handle;
-								CoreNatives.TriggerClientEventInternal($"__cfx_rpcRep:{resource}", player, new object[] { replyId, new[] { result } });
-
-								if (s_playeRemoteHandlers.TryGetValue(player, out var set))
-								{
-									set.Remove(id);
-								}
+				Remote remote = new Remote((asyncResultId & 0xFFFF) != 0);
 #endif
-							}
-						}
-					}
+				object[] args = MsgPackDeserializer.DeserializeArray(arguments, (long)argumentsSize);
+				var result = dynFunc(remote, args);
 
-					return true;
-				}
-				else if (eventName == RpcReplyName)
+				if (result is Coroutine coroutine)
 				{
-					args = MsgPackDeserializer.DeserializeArguments(argsSerialized, serializedSize, sourceString, true);
-					if (args.Length > 1)
-					{
-						ulong replyId = (args[0] is string s) ? ulong.Parse(s) : Convert.ToUInt64(args[0]);
-						int id = (int)replyId;
+					coroutine.ContinueWith(c => OutgoingAsyncResult(c, asyncResultId));
+					return StatusCode.ASYNC;
+				}
+				else
+				{
+					byte[] resultSerialized = MsgPackSerializer.Serialize(new object[] { result });
+					var gcHandle = GCHandle.Alloc(resultSerialized, GCHandleType.Pinned);
+					s_results.Add(gcHandle);
 
-						if (s_remoteFuncHandlers.TryGetValue(id, out var func)
-							&& args[1] is object[] callbackArguments)
-						{
-							s_remoteFuncHandlers.Remove(id);
+					resultData = (byte*)gcHandle.AddrOfPinnedObject();
+					resultSize = (ulong)resultSerialized.LongLength;
 
-							try
-							{
-								func(callbackArguments);
-							}
-							catch (Exception ex)
-							{
-								if (Debug.ShouldWeLogDynFuncError(ex, func))
-								{
-									string argsString = string.Join<string>(", ", args.Select(a => a.GetType().ToString()));
-									Debug.WriteLine($"^1Error while handling RPC reply\n\twith arguments: ({argsString})^7");
-									Debug.PrintError(ex);
-								}
-							}
-						}
-					}
-
-					return true;
+					return StatusCode.SUCCESSFUL;
 				}
 			}
 
-			return false;
+			return StatusCode.FUNCTION_NOT_FOUND;
 		}
 
-		internal static ulong RegisterRemoteFunction(Type returnType, DynFunc deleg)
+		[SecuritySafeCritical]
+		public static unsafe void RegisterExport(string exportName, DynFunc dynFunc, Binding binding)
 		{
-			int id = deleg.GetHashCode();
-			if (deleg.Target != null)
-				id ^= deleg.Target.GetHashCode();
+			ulong privateId = (ulong)dynFunc.GetHashCode();
+			if (dynFunc.Target != null)
+				privateId ^= (ulong)dynFunc.Target.GetHashCode();
 
 			// keep incrementing until we find a free spot
-			while (s_remoteFuncHandlers.ContainsKey(id)) unchecked { ++id; }
-			s_remoteFuncHandlers.Add(id, deleg);
+			while (s_exports.ContainsKey(privateId)) unchecked { ++privateId; }
+			s_exports.Add(privateId, dynFunc);
 
-			ulong callbackId = (uint)id;
-			if (returnType != typeof(void))
-				callbackId |= (ulong)_ExternalFunction.Flags.HAS_RETURN_VALUE; // any type
-
-			return callbackId;
+			ScriptInterface.RegisterExport(exportName, privateId, (ulong)binding);
 		}
 
-		internal static void UnRegisterRemoteFunction(ulong id)
+		[SecuritySafeCritical]
+		public static unsafe Coroutine<dynamic> InvokeExternalExport(string resourceName, string exportName, byte[] argumentData)
 		{
-			s_remoteFuncHandlers.Remove((int)id);
-		}
+			var status = (StatusCode)ScriptInterface.InvokeExternalExport(resourceName, exportName, argumentData, out var resultData, out ulong resultSize, out ulong asyncResultId);
 
-#if IS_FXSERVER
-		internal static object OnPlayerDropped(object[] args)
-		{
-			try
+			switch (status)
 			{
-				// last argument is the Player
-				Player player = (Player)args[args.Length - 1];
-
-				if (s_playeRemoteHandlers.TryGetValue(player.Handle, out var set))
-				{
-					s_playeRemoteHandlers.Remove(player.Handle);
-
-					foreach (var entry in set)
+				case StatusCode.SUCCESSFUL:
+					if (resultData != null)
 					{
-						s_remoteFuncHandlers.Remove(entry);
+						object[] objects = MsgPackDeserializer.DeserializeArray(resultData, (long)resultSize);
+						if (objects.Length > 0)
+							return Coroutine.Completed<dynamic>(objects[0]);
+					}
+
+					return Coroutine.Completed<dynamic>(null);
+
+				case StatusCode.ASYNC:
+				case StatusCode.REMOTE:
+					return s_asyncs[asyncResultId] = new Coroutine<dynamic>();
+
+				case StatusCode.FUNCTION_INACCASSIBLE:
+					throw new ExternalAccessException($"{resourceName}:{exportName}");
+
+				case StatusCode.FUNCTION_NOT_FOUND:
+				case StatusCode.RESOURCE_NOT_FOUND:
+					throw new ExternalMissingException($"{resourceName}:{exportName}");
+
+				case StatusCode.FAILED:
+					throw new ExternalFailedException($"{resourceName}:{exportName}");
+
+				default:
+					throw new NotSupportedException("This shouldn't happen, please report with a repo.");
+			}
+		}
+
+		[SecuritySafeCritical]
+		public static unsafe void OutgoingAsyncResult(Coroutine coroutine, ulong asyncResultId)
+		{
+			var result = coroutine.GetResult();
+
+			byte[] resultSerialized = MsgPackSerializer.Serialize(new object[] { result });
+			var gcHandle = GCHandle.Alloc(resultSerialized, GCHandleType.Pinned);
+			s_results.Add(gcHandle);
+
+			var resultData = (byte*)gcHandle.AddrOfPinnedObject();
+			var resultSize = (ulong)resultSerialized.LongLength;
+
+			ScriptInterface.OutgoingAsyncResult(asyncResultId, (byte)StatusCode.SUCCESSFUL, resultData, resultSize);
+		}
+
+		[SecuritySafeCritical]
+		public static unsafe void IncomingAsyncResult(ulong asyncResultId, StatusCode status, byte* arguments, ulong argumentsSize)
+		{
+			if (s_asyncs.TryGetValue(asyncResultId, out var coroutine))
+			{
+				s_asyncs.Remove(asyncResultId);
+
+				try
+				{
+
+					switch (status)
+					{
+						case StatusCode.SUCCESSFUL:
+							object[] objects = MsgPackDeserializer.DeserializeArray(arguments, (long)argumentsSize);
+							coroutine.Complete(objects.Length > 0 ? objects[0] : null);
+							break;
+						case StatusCode.FUNCTION_INACCASSIBLE:
+							coroutine.Fail(null, new ExternalAccessException());
+							break;
+						case StatusCode.FUNCTION_NOT_FOUND:
+						case StatusCode.RESOURCE_NOT_FOUND:
+							coroutine.Fail(null, new ExternalMissingException());
+							break;
+						case StatusCode.FAILED:
+							coroutine.Fail(null, new ExternalFailedException());
+							break;
+						default:
+							coroutine.Fail(null, new NotSupportedException("This shouldn't happen, please report with a repo."));
+							break;
 					}
 				}
+				catch (Exception ex)
+				{
+					Debug.WriteLine(ex);
+				}
 			}
-			catch (Exception e)
-			{
-				Debug.WriteLine($"RPC playerDropped exception: {e}");
-			}
-
-			return null;
 		}
+	}
 
-		internal static void AddRPCToPlayer(string source, int callbackId)
-		{
-			// add a player promise
-			if (!s_playeRemoteHandlers.ContainsKey(source))
-			{
-				s_playeRemoteHandlers[source] = new HashSet<int>();
-			}
+	public class ExternalMissingException : Exception
+	{
+		public ExternalMissingException() : base() { }
+		public ExternalMissingException(string message) : base(message) { }
+	}
 
-			s_playeRemoteHandlers[source].Add(callbackId);
-		}
-#endif
+	public class ExternalAccessException : Exception
+	{
+		public ExternalAccessException() : base() { }
+		public ExternalAccessException(string message) : base(message) { }
+	}
+
+	public class ExternalFailedException : Exception
+	{
+		public ExternalFailedException() : base() { }
+		public ExternalFailedException(string message) : base(message) { }
 	}
 }
-#endif

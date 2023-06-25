@@ -12,6 +12,11 @@
 
 using namespace ExternalFunctions;
 
+namespace fx
+{
+class Resource;
+}
+
 /* starting interface:    ISCRIPTRUNTIME_EXTERNALFUNCTIONS */
 #define ISCRIPTRUNTIME_EXTERNALFUNCTIONS_IID_STR "bef565ee-61b7-4543-990a-5fbb9f7814a3"
 
@@ -25,7 +30,8 @@ public:
 	NS_DECLARE_STATIC_IID_ACCESSOR(ISCRIPTRUNTIME_EXTERNALFUNCTIONS_IID)
 
 	NS_IMETHOD_(StatusCode) InvokeExport(PrivateId privateId, std::string_view argumentData, const char*& resultData, size_t& resultSize, AsyncResultId asyncResultId) = 0;
-	NS_IMETHOD_(void) AsyncResult(PrivateId privateId, std::string_view argumentData, AsyncResultId asyncResultId) = 0;
+	NS_IMETHOD_(void) AsyncResult(AsyncResultId privateId, uint8_t status, std::string_view argumentData) = 0;
+	NS_IMETHOD_(fx::Resource*) GetResource() const = 0;
 };
 
 NS_DEFINE_STATIC_IID_ACCESSOR(IScriptRuntimeExternalFunctions, ISCRIPTRUNTIME_EXTERNALFUNCTIONS_IID)
@@ -33,4 +39,5 @@ NS_DEFINE_STATIC_IID_ACCESSOR(IScriptRuntimeExternalFunctions, ISCRIPTRUNTIME_EX
 /* Use this macro when declaring classes that implement this interface. */
 #define NS_DECL_ISCRIPTRUNTIME_EXTERNALFUNCTIONS \
 	NS_IMETHOD_(StatusCode) InvokeExport(PrivateId privateId, std::string_view argumentData, const char*& resultData, size_t& resultSize, AsyncResultId asyncResultId) override; \
-	NS_IMETHOD_(void) AsyncResult(PrivateId privateId, std::string_view argumentData, AsyncResultId asyncResultId) override;
+	NS_IMETHOD_(void) AsyncResult(AsyncResultId privateId, uint8_t status, std::string_view argumentData) override; \
+	NS_IMETHOD_(fx::Resource*) GetResource() const override;

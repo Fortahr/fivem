@@ -2,8 +2,13 @@
 
 #include <cassert>
 #include <chrono>
+#include <string_view>
+
+#include <Resource.h>
 
 #include "ExternalManager.h"
+
+using namespace std::string_view_literals;
 
 namespace ExternalFunctions
 {
@@ -16,6 +21,17 @@ namespace ExternalFunctions
 	}
 
 	template<bool _IsServer>
+	inline AsyncResultId ExternalManager<_IsServer>::CreateLocalAsyncId()
+	{
+		auto timestamp = (decltype(AsyncResultId::timestamp))std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
+		if constexpr (_IsServer)
+			return AsyncResultId(AsyncResultId::SERVER, asyncIds++, timestamp);
+		else
+			return AsyncResultId(0, asyncIds++, timestamp);
+	}
+
+	template<bool _IsServer>
 	inline bool ExternalManager<_IsServer>::IsRemote(Remote remote)
 	{
 		if constexpr (_IsServer)
@@ -25,9 +41,9 @@ namespace ExternalFunctions
 	}
 
 	template<bool _IsServer>
-	inline bool ExternalManager<_IsServer>::RegisterExport(Runtime& runtime, std::string_view resource, std::string_view exportName, PrivateId privateId, Binding binding)
+	inline bool ExternalManager<_IsServer>::RegisterExport(Runtime& runtime, std::string_view exportName, PrivateId privateId, Binding binding)
 	{
-		auto inserted = exports[(std::string)resource].try_emplace((std::string)exportName, runtime, binding, privateId);
+		auto inserted = exports[runtime.GetResource()->GetName()].try_emplace((std::string)exportName, runtime, binding, privateId);
 		return inserted.second;
 	}
 
@@ -64,7 +80,7 @@ namespace ExternalFunctions
 	}
 
 	template<bool _IsServer>
-	inline StatusCode ExternalManager<_IsServer>::InvokeExportFromLocal(Remote remote, std::string_view resource, std::string_view exportName, std::string_view argumentData, const char*& resultData, size_t& resultSize, Runtime& caller, AsyncResultId& asyncResultId)
+	inline StatusCode ExternalManager<_IsServer>::InvokeExportFromLocal(Remote remote, const std::string& resource, std::string_view exportName, std::string_view argumentData, const char*& resultData, size_t& resultSize, Runtime& caller, AsyncResultId& asyncResultId)
 	{
 		if (IsRemote(remote))
 		{
@@ -72,7 +88,8 @@ namespace ExternalFunctions
 			auto awaiter = awaiters.try_emplace(resultId, caller, awaiters, resultId);
 			if (awaiter.second)
 			{
-				awaiter.first->second.AddToList(Bookkeeping::Sources::RUNTIME, &runtimes[&caller]);
+				awaiter.first->second.AddToList(Bookkeeping::Sources::RESOURCE_CALLER, &resourceCallers[caller.GetResource()]);
+				awaiter.first->second.AddToList(Bookkeeping::Sources::RESOURCE_CALLEE, &resourceCallees[resource]);
 				awaiter.first->second.AddToList(Bookkeeping::Sources::REMOTE, &remotes[remote].first);
 			}
 
@@ -82,7 +99,7 @@ namespace ExternalFunctions
 		}
 		else
 		{
-			auto resourceFound = exports.find((std::string)resource);
+			auto resourceFound = exports.find(resource);
 			if (resourceFound != exports.end())
 			{
 				auto exportFound = resourceFound->second.find((std::string)exportName);
@@ -91,14 +108,15 @@ namespace ExternalFunctions
 					ExportFunction& exportFunc = exportFound->second;
 					if (exportFunc.binding & Binding::LOCAL)
 					{
-						auto resultId = asyncResultId = CreateAsyncId(0);
+						auto resultId = asyncResultId = CreateLocalAsyncId();
 						StatusCode status = exportFunc.runtime.InvokeExport(exportFound->second.privateId, argumentData, resultData, resultSize, asyncResultId);
 						if (status == StatusCode::ASYNC)
 						{
 							auto awaiter = awaiters.try_emplace(resultId, caller, awaiters, resultId);
 							if (awaiter.second)
 							{
-								awaiter.first->second.AddToList(Bookkeeping::Sources::RUNTIME, &runtimes[&exportFunc.runtime]);
+								awaiter.first->second.AddToList(Bookkeeping::Sources::RESOURCE_CALLER, &resourceCallers[caller.GetResource()]);
+								awaiter.first->second.AddToList(Bookkeeping::Sources::RESOURCE_CALLEE, &resourceCallees[resource]);
 							}
 						}
 
@@ -128,11 +146,9 @@ namespace ExternalFunctions
 			if (found != awaiters.end())
 			{
 				auto& awaiter = found->second;
-				awaiter.resource->AsyncResult(asyncResultId, statusCode, argumentData);
+				awaiter.runtime.AsyncResult(asyncResultId, (uint8_t)statusCode, argumentData);
 				awaiters.erase(found);
 			}
-			else
-				assert(false);
 		}
 	}
 
@@ -148,11 +164,9 @@ namespace ExternalFunctions
 		if (found != awaiters.end())
 		{
 			auto& awaiter = found->second;
-			awaiter.resource->AsyncResult(asyncResultId, statusCode, argumentData);
+			aawaiter.runtime.AsyncResult(asyncResultId, statusCode, argumentData);
 			awaiters.erase(found);
 		}
-		else
-			assert(false);
 	}
 
 	template<bool _IsServer>
@@ -174,20 +188,62 @@ namespace ExternalFunctions
 	}
 
 	template<bool _IsServer>
-	inline void ExternalManager<_IsServer>::OnScriptRuntimeStop(Runtime* runtime)
+	inline void ExternalManager<_IsServer>::OnResourceStop(fx::Resource* resource)
 	{
-		auto found = runtimes.find(runtime);
-		if (found != runtimes.end())
-		{
-			for (Bookkeeping::Node* node = found->second; node; )
-			{
-				auto next = node->links[(size_t)Bookkeeping::Sources::RUNTIME].next;
-				node->Erase();
-				node = next;
-			}
+		auto removedCount = exports.erase(resource->GetName());
+		trace("OnResourceStop %s %d\n", resource->GetName(), removedCount);
 
-			if (!found->second)
-				runtimes.erase(found);
+		// fail any that awaits this resource
+		{
+			auto found = resourceCallees.find(resource->GetName());
+			if (found != resourceCallees.end())
+			{
+				for (Bookkeeping::Node* node = found->second; node;)
+				{
+					auto next = node->links[(size_t)Bookkeeping::Sources::RESOURCE_CALLEE].next;
+
+					auto asyncResultId = node->GetAsyncResultId();
+					auto foundAwaiter = awaiters.find(asyncResultId);
+					if (foundAwaiter != awaiters.end())
+					{
+						Runtime& runtime = foundAwaiter->second.runtime;
+						runtime.AsyncResult(asyncResultId, (uint8_t)StatusCode::FAILED, "\091\0C0"sv);
+						awaiters.erase(foundAwaiter);
+					}
+
+					node = next;
+				}
+
+				resourceCallees.erase(found);
+			}
+		}
+
+		// remove all of this resource
+		{
+			auto found = resourceCallers.find(resource);
+			if (found != resourceCallers.end())
+			{
+				for (Bookkeeping::Node* node = found->second; node;)
+				{
+					auto next = node->links[(size_t)Bookkeeping::Sources::RESOURCE_CALLER].next;
+					awaiters.erase(node->GetAsyncResultId());
+					node = next;
+				}
+
+				resourceCallers.erase(found);
+			}
+		}
+
+		trace("\tCallees [%d]\n", resourceCallees.size());
+		for (auto& pair : resourceCallees)
+		{
+			trace("\t\tCallee %s %p\n", pair.first, (void*)pair.second);
+		}
+
+		trace("\tCallers [%d]\n", resourceCallers.size());
+		for (auto& pair : resourceCallers)
+		{
+			trace("\t\tCaller %s %p\n", pair.first->GetName(), (void*)pair.second);
 		}
 	}
 }

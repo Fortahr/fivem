@@ -18,7 +18,8 @@ namespace ExternalFunctions
 	{
 		enum class Sources
 		{
-			RUNTIME = 0,
+			RESOURCE_CALLER = 0,
+			RESOURCE_CALLEE,
 			REMOTE,
 
 			COUNT
@@ -34,7 +35,6 @@ namespace ExternalFunctions
 			public:
 				Node** prevNext = nullptr;
 				Node* next = nullptr;
-
 			} links[(size_t)Sources::COUNT];
 
 			std::unordered_map<AsyncResultId, AsyncAwaiter>& container;
@@ -44,9 +44,9 @@ namespace ExternalFunctions
 			inline void AddToList(Sources source, Node** prevNext)
 			{
 				auto& link = links[(size_t)source];
-				link.prevNext = prevNext;
 				link.next = *prevNext;
 				*prevNext = this;
+				link.prevNext = prevNext;
 			}
 
 		public:
@@ -70,9 +70,13 @@ namespace ExternalFunctions
 				{
 					auto& link = links[i];
 
+					//trace("\tthread %d\n", std::hash<std::thread::id>{}(std::this_thread::get_id()));
+
 					auto prevNext = link.prevNext;
 					if (prevNext)
 					{
+						//trace("\tprevNext %p\n", (void*)prevNext);
+
 						auto next = *prevNext = link.next;
 						if (next)
 							next->links[i].prevNext = prevNext;
@@ -80,9 +84,14 @@ namespace ExternalFunctions
 				}
 			}
 
-			void Erase()
+			inline void Erase()
 			{
 				container.erase(identifier);
+			}
+
+			inline AsyncResultId GetAsyncResultId() const
+			{
+				return identifier;
 			}
 		};
 	}

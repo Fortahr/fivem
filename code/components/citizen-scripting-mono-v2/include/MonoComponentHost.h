@@ -7,6 +7,7 @@
 #include <unordered_map>
 
 #include <MonoComponentHostShared.h>
+#include "ExternalFunctions/ExternalManager.h"
 
 #include "MonoScriptRuntime.h"
 #include "MonoMethods.h"
@@ -119,6 +120,7 @@ private:
 	static MonoArray* CanonicalizeRef(const MonoScriptRuntime* runTime, int referenceId);
 	static void RegisterExport(MonoScriptRuntime* runTime, MonoString* exportName, size_t privateId, size_t binding);
 	static uint8_t InvokeExternalExport(MonoScriptRuntime* runTime, MonoString* resourceName, MonoString* exportName, MonoArray* arguments, const char*& resultData, size_t& resultSize, uint64_t& asyncResultId);
+	static void OutgoingAsyncResult(uint64_t asyncResultId, uint8_t statusCode, const char* resultData, size_t resultSize);
 
 private:
 	static void InitializeMethods(MonoImage* image);
@@ -186,6 +188,11 @@ inline void MonoComponentHost::RegisterExport(MonoScriptRuntime* runTime, MonoSt
 inline uint8_t MonoComponentHost::InvokeExternalExport(MonoScriptRuntime* runTime, MonoString* resourceName, MonoString* exportName, MonoArray* arguments, const char*& resultData, size_t& resultSize, uint64_t& asyncResultId)
 {
 	return runTime->InvokeExternalExport(resourceName, exportName, arguments, resultData, resultSize, asyncResultId);
+}
+
+inline void MonoComponentHost::OutgoingAsyncResult(uint64_t asyncResultId, uint8_t statusCode, const char* resultData, size_t resultSize)
+{
+	ExternalFunctions::GetManager().AsyncResultFromLocal(asyncResultId, (ExternalFunctions::StatusCode)statusCode, std::string_view(resultData, resultSize));
 }
 
 }

@@ -236,6 +236,8 @@ namespace CitizenFX.Core
 		}
 
 		#region Func<,> creators, C# why?!
+		[SecuritySafeCritical] public static DynFunc Create(Func<Coroutine> method) => Create(method.Target, method.Method);
+		[SecuritySafeCritical] public static DynFunc Create<Ret>(Func<Coroutine<Ret>> method) => Create(method.Target, method.Method);
 		[SecuritySafeCritical] public static DynFunc Create<Ret>(Func<Ret> method) => Create(method.Target, method.Method);
 		[SecuritySafeCritical] public static DynFunc Create<A, Ret>(Func<A, Ret> method) => Create(method.Target, method.Method);
 		[SecuritySafeCritical] public static DynFunc Create<A, B, Ret>(Func<A, B, Ret> method) => Create(method.Target, method.Method);

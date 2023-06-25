@@ -56,7 +56,8 @@ private:
 	Thunk<void(int32_t refIndex, int32_t* newRefIdx)> m_duplicateRef = nullptr;
 	Thunk<void(int32_t refIndex)> m_removeRef = nullptr;
 
-	Thunk<uint8_t(size_t privateId, const char* arguments, size_t argumentsSize, const char** result, size_t* resultSize, size_t asyncResultId)> m_invokeExport = nullptr;
+	Thunk<uint64_t(size_t privateId, const char* arguments, size_t argumentsSize, uint8_t& status, const char*& result, size_t& resultSize, size_t asyncResultId, uint64_t gameTime, bool profiling)> m_invokeExport = nullptr;
+	Thunk<uint64_t(size_t asyncResultId, uint8_t status, const char* arguments, size_t argumentsSize, uint64_t gameTime, bool profiling)> m_asyncResult = nullptr;
 
 	Thunk<int64_t()> m_getMemoryUsage = nullptr;
 	Thunk<void()> m_startProfiling = nullptr;

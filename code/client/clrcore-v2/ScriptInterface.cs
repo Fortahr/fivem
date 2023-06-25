@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -18,6 +19,7 @@ using ContextType = CitizenFX.Core.RageScriptContext;
 
 namespace CitizenFX.Core
 {
+	[SecurityCritical, SuppressMessage("System.Diagnostics.CodeAnalysis", "IDE0051", Justification = "Called by host")]
 	internal static class ScriptInterface
 	{
 		private static UIntPtr s_runtime;
@@ -27,67 +29,63 @@ namespace CitizenFX.Core
 
 		#region Callable from C#
 
-		[SecurityCritical, MethodImpl(MethodImplOptions.InternalCall)]
+		[MethodImpl(MethodImplOptions.InternalCall)]
 		internal static extern void CFree(IntPtr ptr);
 
-		[SecurityCritical, MethodImpl(MethodImplOptions.InternalCall)]
+		[MethodImpl(MethodImplOptions.InternalCall)]
 		internal static extern void Print(string channel, string text);
 
-		/*[SecurityCritical, MethodImpl(MethodImplOptions.InternalCall)]
+		/*[MethodImpl(MethodImplOptions.InternalCall)]
 		internal static extern ulong GetMemoryUsage();
 
-		[SecurityCritical]
 		[MethodImpl(MethodImplOptions.InternalCall)]
 		internal static extern bool SnapshotStackBoundary(out byte[] data);
 
-		[SecurityCritical]
 		[MethodImpl(MethodImplOptions.InternalCall)]
 		internal static extern bool WalkStackBoundary(string resourceName, byte[] start, byte[] end, out byte[] blob);*/
 
-		[SecurityCritical, MethodImpl(MethodImplOptions.InternalCall)]
+		[MethodImpl(MethodImplOptions.InternalCall)]
 		internal static extern bool ProfilerIsRecording();
 
-		[SecurityCritical, MethodImpl(MethodImplOptions.InternalCall)]
+		[MethodImpl(MethodImplOptions.InternalCall)]
 		internal static extern void ProfilerEnterScope(string name);
 
-		[SecurityCritical, MethodImpl(MethodImplOptions.InternalCall)]
+		[ MethodImpl(MethodImplOptions.InternalCall)]
 		internal static extern void ProfilerExitScope();
 
-		[SecurityCritical, MethodImpl(MethodImplOptions.InternalCall)]
+		[MethodImpl(MethodImplOptions.InternalCall)]
 		internal static extern UIntPtr GetNative(ulong hash);
 
-		[SecurityCritical, MethodImpl(MethodImplOptions.InternalCall)]
+		[MethodImpl(MethodImplOptions.InternalCall)]
 		internal static extern unsafe bool InvokeNative(UIntPtr native, ref ContextType context, ulong hash);
 
-		[SecurityCritical, MethodImpl(MethodImplOptions.InternalCall)]
+		[MethodImpl(MethodImplOptions.InternalCall)]
 		private static extern unsafe byte[] CanonicalizeRef(UIntPtr host, int refId);
 
-		[SecurityCritical]
 		internal static unsafe byte[] CanonicalizeRef(int refId) => CanonicalizeRef(s_runtime, refId);
 
-		[SecurityCritical, MethodImpl(MethodImplOptions.InternalCall)]
+		[MethodImpl(MethodImplOptions.InternalCall)]
 		private static extern unsafe void RegisterExport(UIntPtr runtime, string exportName, ulong privateId, ulong binding);
 		
-		[SecurityCritical]
 		internal static unsafe void RegisterExport(string exportName, ulong privateId, ulong binding) => RegisterExport(s_runtime, exportName, privateId, binding);
 
-		[SecurityCritical, MethodImpl(MethodImplOptions.InternalCall)]
+		[MethodImpl(MethodImplOptions.InternalCall)]
 		private static extern unsafe byte InvokeExternalExport(UIntPtr runtime, string resourceName, string exportName, byte[] argumentData, out byte* result, out ulong resultSize, out ulong asyncRedultId);
 
-		[SecurityCritical]
 		internal static unsafe byte InvokeExternalExport(string resourceName, string exportName, byte[] argumentData, out byte* result, out ulong resultSize, out ulong asyncRedultId)
 			=> InvokeExternalExport(s_runtime, resourceName, exportName, argumentData, out result, out resultSize, out asyncRedultId);
 
-		[SecurityCritical, MethodImpl(MethodImplOptions.InternalCall)]
+		[MethodImpl(MethodImplOptions.InternalCall)]
+		internal static extern unsafe byte OutgoingAsyncResult(ulong asyncRedultId, byte status, byte* result, ulong resultSize);
+
+		[MethodImpl(MethodImplOptions.InternalCall)]
 		private static extern unsafe bool ReadAssembly(UIntPtr host, string file, out byte[] assembly, out byte[] symbols);
 
-		[SecurityCritical]
 		internal static unsafe bool ReadAssembly(string file, out byte[] assembly, out byte[] symbols) => ReadAssembly(s_runtime, file, out assembly, out symbols);
 
 		#endregion
 
 		#region Called by Native
-		[SecurityCritical, SuppressMessage("System.Diagnostics.CodeAnalysis", "IDE0051", Justification = "Called by host")]
 		internal static void Initialize(string resourceName, UIntPtr runtime, int instanceId)
 		{
 			s_runtime = runtime;
@@ -105,7 +103,6 @@ namespace CitizenFX.Core
 #endif
 		}
 
-		[SecurityCritical, SuppressMessage("System.Diagnostics.CodeAnalysis", "IDE0051", Justification = "Called by host")]
 		internal static ulong Tick(ulong hostTime, bool profiling)
 		{
 			Scheduler.CurrentTime = (TimePoint)hostTime;
@@ -124,7 +121,6 @@ namespace CitizenFX.Core
 			return Scheduler.NextTaskTime();
 		}
 
-		[SecurityCritical, SuppressMessage("System.Diagnostics.CodeAnalysis", "IDE0051", Justification = "Called by host")]
 		internal static unsafe ulong TriggerEvent(string eventName, byte* argsSerialized, int serializedSize, string sourceString, ulong hostTime, bool profiling)
 		{
 			Scheduler.CurrentTime = (TimePoint)hostTime;
@@ -153,7 +149,6 @@ namespace CitizenFX.Core
 			return Scheduler.NextTaskTime();
 		}
 
-		[SecurityCritical, SuppressMessage("System.Diagnostics.CodeAnalysis", "IDE0051", Justification = "Called by host")]
 		internal static unsafe ulong LoadAssembly(string name, ulong hostTime, bool profiling)
 		{
 			Scheduler.CurrentTime = (TimePoint)hostTime;
@@ -164,7 +159,6 @@ namespace CitizenFX.Core
 			return Scheduler.NextTaskTime();
 		}
 
-		[SecurityCritical, SuppressMessage("System.Diagnostics.CodeAnalysis", "IDE0051", Justification = "Called by host")]
 		internal static unsafe ulong CallRef(int refIndex, byte* argsSerialized, uint argsSize, out IntPtr retvalSerialized, out uint retvalSize, ulong hostTime, bool profiling)
 		{
 			Scheduler.CurrentTime = (TimePoint)hostTime;
@@ -175,24 +169,32 @@ namespace CitizenFX.Core
 			return Scheduler.NextTaskTime();
 		}
 
-		[SecurityCritical, SuppressMessage("System.Diagnostics.CodeAnalysis", "IDE0051", Justification = "Called by host")]
 		internal static int DuplicateRef(int refIndex)
 		{
 			return ReferenceFunctionManager.IncrementReference(refIndex);
 		}
 
-		[SecurityCritical, SuppressMessage("System.Diagnostics.CodeAnalysis", "IDE0051", Justification = "Called by host")]
 		internal static void RemoveRef(int refIndex)
 		{
 			ReferenceFunctionManager.DecrementReference(refIndex);
 		}
 
-		[SecurityCritical, SuppressMessage("System.Diagnostics.CodeAnalysis", "IDE0051", Justification = "Called by host")]
-		internal static unsafe byte InvokeExport(ulong privateId, byte* arguments, ulong argumentsSize, ref byte* result, ref ulong resultSize, ulong asyncResultId)
+		internal static unsafe ulong InvokeExport(ulong privateId, byte* arguments, ulong argumentsSize, out byte status, ref byte* result, ref ulong resultSize, ulong asyncResultId, ulong hostTime, bool profiling)
 		{
-			Debug.WriteLine("LALALALA");
-			
-			return 0;
+			Scheduler.CurrentTime = (TimePoint)hostTime;
+			Profiler.IsProfiling = profiling;
+
+			status = (byte)ExternalsManager.IncomingExport(privateId, arguments, argumentsSize, ref result, ref resultSize, asyncResultId);
+			return Scheduler.NextTaskTime();
+		}
+
+		internal static unsafe ulong AsyncResult(ulong asyncResultId, ExternalsManager.StatusCode status, byte* arguments, ulong argumentsSize, ulong hostTime, bool profiling)
+		{
+			Scheduler.CurrentTime = (TimePoint)hostTime;
+			Profiler.IsProfiling = profiling;
+
+			ExternalsManager.IncomingAsyncResult(asyncResultId, status, arguments, argumentsSize);
+			return Scheduler.NextTaskTime();
 		}
 
 		#endregion
@@ -201,14 +203,10 @@ namespace CitizenFX.Core
 	[SecuritySafeCritical]
 	public class RemoveMeTest
 	{
-		public static void RegisterExport(string exportName, ulong privateId, ulong binding)
-		{
-			ScriptInterface.RegisterExport(exportName, privateId, binding);
-		}
+		public static void RegisterExport(string exportName, DynFunc dynFunc, Binding binding)
+			=> ExternalsManager.RegisterExport(exportName, dynFunc, binding);
 
-		public static unsafe void InvokeExternalExport(string resourceName, string exportName, byte[] argumentData)
-		{
-			ScriptInterface.InvokeExternalExport(resourceName, exportName, argumentData, out var resultData, out ulong resultSize, out ulong asyncRedultId);
-		}
+		public static unsafe Coroutine<dynamic> InvokeExternalExport(string resourceName, string exportName, byte[] argumentData)
+			=> ExternalsManager.InvokeExternalExport(resourceName, exportName, argumentData);
 	}
 }

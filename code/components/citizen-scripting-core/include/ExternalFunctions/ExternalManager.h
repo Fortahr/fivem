@@ -1,10 +1,12 @@
 #pragma once
 
+#include <Stdinc.h>
+
 #include <queue>
 #include <string_view>
 #include <unordered_map>
 
-#include "Stdinc.h"
+#include <Resource.h>
 
 #include "AsyncAwaiter.h"
 #include "AsyncResultId.h"
@@ -31,7 +33,8 @@ namespace ExternalFunctions
 		typedef std::conditional_t<_IsServer, uint16_t, bool> Remote;
 
 	private:
-		std::unordered_map<Runtime*, Bookkeeping::Node*> runtimes;
+		std::unordered_map<fx::Resource*, Bookkeeping::Node*> resourceCallers;
+		std::unordered_map<std::string, Bookkeeping::Node*> resourceCallees;
 		std::unordered_map<Remote, std::pair<Bookkeeping::Node*, std::atomic<uint16_t>>> remotes;
 
 		std::unordered_map<std::string, std::unordered_map<std::string, ExportFunction>> exports;
@@ -39,6 +42,7 @@ namespace ExternalFunctions
 		std::atomic<uint16_t> asyncIds;
 
 		AsyncResultId CreateAsyncId(Remote remote);
+		AsyncResultId CreateLocalAsyncId();
 		bool IsRemote(Remote remote);
 
 	public:
@@ -52,13 +56,13 @@ namespace ExternalFunctions
 		std::queue<std::tuple<AsyncResultId, StatusCode, std::string>> asyncTest;
 
 	public:
-		bool RegisterExport(Runtime& runtime, std::string_view resource, std::string_view exportName, PrivateId privateId, Binding binding);
+		bool RegisterExport(Runtime& runtime, std::string_view exportName, PrivateId privateId, Binding binding);
 
 		void InvokeExportFromRemote(Remote remote, std::string_view resource, std::string_view exportName, std::string_view argumentData, AsyncResultId asyncResultId);
-		StatusCode InvokeExportFromLocal(Remote remote, std::string_view resource, std::string_view exportName, std::string_view argumentData, const char*& resultData, size_t& resultSize, Runtime& caller, AsyncResultId& asyncResultId);
+		StatusCode InvokeExportFromLocal(Remote remote, const std::string& resource, std::string_view exportName, std::string_view argumentData, const char*& resultData, size_t& resultSize, Runtime& caller, AsyncResultId& asyncResultId);
 
 		void OnDisconnect(Remote remote);
-		void OnScriptRuntimeStop(Runtime* runtime);
+		void OnResourceStop(fx::Resource* runtime);
 
 		void AsyncResultFromLocal(AsyncResultId asyncResultId, StatusCode statusCode, std::string_view argumentData);
 		void AsyncResultFromRemote(AsyncResultId asyncResultId, Remote remote, StatusCode statusCode, std::string_view argumentData);
