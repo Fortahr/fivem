@@ -416,8 +416,10 @@ static InitFunction initFunction([]()
 
 		g_reassemblySink.instance = instance;
 		rac->SetSink(&g_reassemblySink);
+		
+		auto clientRegistry = instance->GetComponent<fx::ClientRegistry>();
 
-		instance->GetComponent<fx::ClientRegistry>()->OnClientCreated.Connect([rac](const fx::ClientSharedPtr& client)
+		clientRegistry->OnClientCreated.Connect([rac](const fx::ClientSharedPtr& client)
 		{
 			fx::Client* unsafeClient = client.get();
 			unsafeClient->OnAssignNetId.Connect([rac, unsafeClient]()
@@ -425,13 +427,13 @@ static InitFunction initFunction([]()
 				if (unsafeClient->GetNetId() < 0xFFFF)
 				{
 					rac->RegisterTarget(unsafeClient->GetNetId());
-					
-					unsafeClient->OnDrop.Connect([rac, unsafeClient]()
-					{
-						rac->UnregisterTarget(unsafeClient->GetNetId());
-					});
 				}
 			});
+		});
+
+		clientRegistry->OnClientDropping.Connect([rac](const fx::ClientSharedPtr& client)
+		{
+			rac->UnregisterTarget(client->GetNetId());
 		});
 
 		instance->GetComponent<fx::GameServer>()->OnNetworkTick.Connect([rac]()

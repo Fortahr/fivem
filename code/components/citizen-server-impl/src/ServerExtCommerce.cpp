@@ -180,11 +180,6 @@ void ExtCommerceComponent::ProcessClientCommands(fx::Client* client)
 			auto netId = client->GetNetId();
 			const auto& [playerId, username] = *it->second;
 
-			client->OnDrop.Connect([this, netId]
-			{
-				m_commandQueue[netId].clear();
-			});
-
 			HttpRequestOptions opts;
 			opts.headers["X-Tebex-Secret"] = m_tebexKeyConvar->GetValue();
 
@@ -438,11 +433,6 @@ void ExtCommerceComponent::OnClientConnected(fx::Client* client)
 	ProcessClientCommands(client);
 
 	AddClientEventToQueue(client, "server.join");
-
-	client->OnDrop.Connect([this, client]()
-	{
-		AddClientEventToQueue(client, "server.leave");
-	});
 }
 
 class ClientExtCommerceComponent : public fwRefCountable
@@ -602,6 +592,16 @@ void ExtCommerceComponent::AttachToObject(fx::ServerInstanceBase* instance)
 		clientRegistry->OnClientConnected.Connect([this](const fx::ClientSharedPtr& client)
 		{
 			this->OnClientConnected(client.get());
+		});
+
+		clientRegistry->OnClientDropping.Connect([this](const fx::ClientSharedPtr& client)
+		{
+			if (client->IsConnected())
+			{
+				AddClientEventToQueue(client.get(), "server.leave");
+			}
+			
+			m_commandQueue[client->GetNetId()].clear();
 		});
 	});
 }

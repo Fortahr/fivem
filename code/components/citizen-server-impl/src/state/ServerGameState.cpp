@@ -312,21 +312,6 @@ std::shared_ptr<GameStateClientData> ServerGameState::CreateSyncData(const fx::C
 	}
 
 	client->SetSyncData(data);
-	client->OnDrop.Connect([weakClient, state]()
-	{
-		auto client = weakClient.lock();
-
-		if (client)
-		{
-			auto slotId = client->GetSlotId();
-			auto netId = client->GetNetId();
-
-			gscomms_execute_callback_on_sync_thread([state, client, slotId, netId]()
-			{
-				state->HandleClientDrop(client, netId, slotId);
-			});
-		}
-	});
 
 	return data;
 }
@@ -4287,12 +4272,23 @@ void ServerGameState::AttachToObject(fx::ServerInstanceBase* instance)
 		assert(client->GetSlotId() != -1);
 
 		m_sbac->RegisterTarget(client->GetSlotId());
+	});
 
-		client->OnDrop.Connect([this, client]()
+	clientRegistry->OnClientDropping.Connect([this](const ClientSharedPtr& client)
+	{
+		if (client->IsConnected())
 		{
 			m_sbac->UnregisterTarget(client->GetSlotId());
-		}, INT32_MIN);
-	});
+
+			auto slotId = client->GetSlotId();
+			auto netId = client->GetNetId();
+
+			gscomms_execute_callback_on_sync_thread([this, client, slotId, netId]()
+			{
+				this->HandleClientDrop(client, netId, slotId);
+			});
+		}
+	}, INT32_MIN);
 
 	static auto clearAreaCommand = instance->AddCommand("onesync_clearArea", [this](float x1, float y1, float x2, float y2)
 	{

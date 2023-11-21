@@ -222,15 +222,15 @@ static InitFunction initFunction([]()
 			g_playerListData[client->GetGuid()].connectionState = "CONNECTING";
 			client->SetNetworkMetricsRecvCallback(RecvFromClient_Callback);
 			client->SetNetworkMetricsSendCallback(SendToClient_Callback);
+		});
 
-			auto guid = client->GetGuid();
-
-			client->OnDrop.Connect([guid]()
+		{
+			clientRegistry->OnClientDropping.Connect([](const fx::ClientSharedPtr& client)
 			{
 				std::unique_lock lock(g_playerListDataMutex);
-				g_playerListData.erase(guid);
+				g_playerListData.erase(client->GetGuid());
 			});
-		});
+		}
 
 		clientRegistry->OnClientConnected.Connect([](const fx::ClientSharedPtr& client)
 		{

@@ -87,13 +87,20 @@ namespace fx
 
 		fx::ClientSharedPtr MakeClient(const std::string& guid);
 
-		inline void RemoveClient(const fx::ClientSharedPtr& client)
+		inline void DropClient(const fx::ClientSharedPtr& client)
 		{
 			if (!client->IsDropping())
 			{
+				client->SetDropping();
+
 				// some code expects OnDrop to follow any OnClientCreated
-				client->OnDrop();
+				OnClientDropping(client);
 			}
+		}
+
+		inline void RemoveClient(const fx::ClientSharedPtr& client)
+		{
+			DropClient(client);
 
 			m_clientsByPeer[client->GetPeer()].reset();
 			m_clientsByNetId[client->GetNetId()].reset();
@@ -263,6 +270,7 @@ namespace fx
 		virtual void AttachToObject(ServerInstanceBase* instance) override;
 
 		fwEvent<const fx::ClientSharedPtr&> OnClientCreated;
+		fwEvent<const fx::ClientSharedPtr&> OnClientDropping;
 		fwEvent<const fx::ClientSharedPtr&> OnClientConnected;
 
 	private:

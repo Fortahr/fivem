@@ -11,35 +11,6 @@ namespace fx
 
 	}
 
-	void Client::SetPeer(int peer, const net::PeerAddress& peerAddress)
-	{
-		m_peer = peer;
-		m_peerAddress = peerAddress;
-
-		OnAssignPeer();
-	}
-
-	void Client::SetNetBase(uint32_t netBase)
-	{
-		m_netBase = netBase;
-	}
-
-	void Client::SetNetId(uint32_t netId)
-	{
-		m_netId = netId;
-
-		OnAssignNetId();
-
-		UpdateCachedPrincipalValues();
-	}
-
-	void Client::SetTcpEndPoint(const std::string& value)
-	{
-		m_tcpEndPoint = value;
-
-		OnAssignTcpEndPoint();
-	}
-
 	void Client::Touch()
 	{
 		m_lastSeen = msec();

@@ -352,7 +352,6 @@ namespace fx
 
 		fwEvent<> OnCreatePed;
 
-		fwEvent<> OnDrop;
 
 	private:
 		inline void UpdateCachedPrincipalValues()
