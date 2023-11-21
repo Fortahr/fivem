@@ -87,9 +87,9 @@ namespace fx
 
 		fx::ClientSharedPtr MakeClient(const std::string& guid);
 
-		inline void DropClient(const fx::ClientSharedPtr& client)
+		inline void DropClient(const fx::ClientSharedPtr& client, bool forceEventCall = false)
 		{
-			if (!client->IsDropping())
+			if (forceEventCall || !client->IsDropping())
 			{
 				client->SetDropping();
 

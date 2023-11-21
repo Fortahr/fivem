@@ -1143,7 +1143,7 @@ namespace fx
 		}
 
 		// signal a drop
-		m_clientRegistry->DropClient(client);
+		m_clientRegistry->DropClient(client, true);
 
 		{
 			// for name handling, send player state
