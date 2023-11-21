@@ -279,13 +279,13 @@ public:
 		Reset();
 	}
 
-	template<typename T>
+	template<typename T, typename = std::enable_if_t<std::is_invocable_v<T, Args...>>>
 	auto Connect(T func)
 	{
 		return Connect(func, 0);
 	}
 
-	template<typename T>
+	template<typename T, typename = std::enable_if_t<std::is_invocable_v<T, Args...>>>
 	auto Connect(T func, int order)
 	{
 		if constexpr (std::is_same_v<std::invoke_result_t<T, Args...>, bool>)

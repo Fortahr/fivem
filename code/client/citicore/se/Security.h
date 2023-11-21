@@ -1,5 +1,11 @@
 #pragma once
 
+#include <assert.h>
+
+#if defined(_WIN32)
+#include <Windows.h>
+#endif
+
 namespace se
 {
 class Principal
