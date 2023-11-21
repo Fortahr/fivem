@@ -111,7 +111,7 @@ static const auto& CollectPlayers(fx::ServerInstanceBase* instance)
 	auto sgs = instance->GetComponent<fx::ServerGameStatePublic>();
 
 	// Skips Dropping clients.
-	clientRegistry->ForAllClients([](fx::ClientSharedPtr client)
+	clientRegistry->ForAllClients([](const fx::ClientSharedPtr& client)
 	{
 		std::unique_lock lock(g_playerListDataMutex);
 		auto& entry = g_playerListData[client->GetGuid()];

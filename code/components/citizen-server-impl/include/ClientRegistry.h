@@ -215,7 +215,7 @@ namespace fx
 			return false;
 		}
 
-		template<typename TFn>
+		template<typename TFn, typename = std::enable_if_t<std::is_invocable_v<TFn, fx::ClientSharedPtr>>>
 		inline void ForAllClientsLocked(TFn&& cb)
 		{
 			std::shared_lock readHolder(m_clientMutex);
@@ -230,7 +230,7 @@ namespace fx
 			}
 		}
 
-		template<typename TFn>
+		template<typename TFn, typename = std::enable_if_t<std::is_invocable_v<TFn, fx::ClientSharedPtr>>>
 		inline void ForAllClients(TFn&& cb)
 		{
 			std::vector<fx::ClientSharedPtr> allClients{};
