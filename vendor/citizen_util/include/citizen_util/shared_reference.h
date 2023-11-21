@@ -193,7 +193,7 @@ struct shared_reference
 		reset();
 	}
 
-	template<typename... A>
+	template<typename... A, typename = std::enable_if_t<std::is_constructible_v<T, A...>>>
 	static shared_reference Construct(A&&... args)
 	{
 		shared_reference return_val{};
