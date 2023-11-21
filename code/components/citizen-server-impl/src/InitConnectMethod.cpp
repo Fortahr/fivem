@@ -580,7 +580,7 @@ static InitFunction initFunction([]()
 			client->SetName(name);
 			client->SetConnectionToken(token);
 			client->SetTcpEndPoint(ra.substr(0, ra.find_last_of(':')));
-			client->SetNetId(0x10000 + tempId);
+			clientRegistry->SetClientNetId(client, 0x10000 + tempId);
 
 			// add the entitlement hash if needed
 			if (ticketData.entitlementHash)

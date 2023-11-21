@@ -1300,6 +1300,8 @@ public:
 	uint32_t MakeScriptHandle(const fx::sync::SyncEntityPtr& ptr);
 
 private:
+	void InitializeStateBag(const fx::ClientSharedPtr& client);
+
 	std::shared_ptr<GameStateClientData> CreateSyncData(const fx::ClientSharedPtr& client);
 
 public:

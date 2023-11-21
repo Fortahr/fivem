@@ -261,6 +261,24 @@ sync::SyncEntityState::SyncEntityState()
 
 }
 
+void ServerGameState::InitializeStateBag(const ClientSharedPtr& client)
+{
+	if (client->IsConnected())
+	{
+		auto data = client->GetSyncData();
+		if (data)
+		{
+			data->playerBag = this->GetStateBags()->RegisterStateBag(fmt::sprintf("player:%d", client->GetNetId()));
+			data->playerBag->SetOwningPeer(client->GetSlotId());
+
+			if (fx::IsBigMode())
+			{
+				data->playerBag->AddRoutingTarget(client->GetSlotId());
+			}
+		}
+	}
+}
+
 std::shared_ptr<GameStateClientData> ServerGameState::CreateSyncData(const fx::ClientSharedPtr& client)
 {
 	auto lock = client->AcquireSyncDataCreationLock();
@@ -270,48 +288,12 @@ std::shared_ptr<GameStateClientData> ServerGameState::CreateSyncData(const fx::C
 		return std::static_pointer_cast<GameStateClientData>(existingData);
 	}
 
-	fx::ClientWeakPtr weakClient(client);
-
 	auto data = std::make_shared<GameStateClientData>();
-	data->client = weakClient;
 
-	std::weak_ptr<GameStateClientData> weakData(data);
-
-	auto setupBag = [weakClient, weakData, this]()
-	{
-		auto client = weakClient.lock();
-		auto data = weakData.lock();
-
-		if (client && data)
-		{
-			if (client->GetNetId() < 0xFFFF)
-			{
-				data->playerBag = this->GetStateBags()->RegisterStateBag(fmt::sprintf("player:%d", client->GetNetId()));
-
-				if (fx::IsBigMode())
-				{
-					data->playerBag->AddRoutingTarget(client->GetSlotId());
-				}
-
-				data->playerBag->SetOwningPeer(client->GetSlotId());
-			}
-		}
-	};
-
-	if (client->GetNetId() < 0xFFFF)
-	{
-		setupBag();
-	}
-	else
-	{
-		client->OnAssignNetId.Connect([setupBag]()
-		{
-			setupBag();
-		},
-		INT32_MAX);
-	}
-
+	data->client = client;
 	client->SetSyncData(data);
+
+	InitializeStateBag(client);
 
 	return data;
 }
@@ -4289,6 +4271,8 @@ void ServerGameState::AttachToObject(fx::ServerInstanceBase* instance)
 			});
 		}
 	}, INT32_MIN);
+
+	clientRegistry->OnClientAssignNetId.Connect(std::bind(&ServerGameState::InitializeStateBag, this, std::placeholders::_1), INT32_MAX);
 
 	static auto clearAreaCommand = instance->AddCommand("onesync_clearArea", [this](float x1, float y1, float x2, float y2)
 	{

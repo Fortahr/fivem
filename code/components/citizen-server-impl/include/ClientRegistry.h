@@ -212,6 +212,8 @@ namespace fx
 			return ptr;
 		}
 
+		void SetClientNetId(const fx::ClientSharedPtr& client, uint32_t netId);
+
 		inline bool HasClientByConnectionTokenHash(uint32_t hash)
 		{
 			if (auto it = m_clientsByConnectionTokenHash.find(hash); it != m_clientsByConnectionTokenHash.end())
@@ -272,6 +274,7 @@ namespace fx
 		fwEvent<const fx::ClientSharedPtr&> OnClientCreated;
 		fwEvent<const fx::ClientSharedPtr&> OnClientDropping;
 		fwEvent<const fx::ClientSharedPtr&> OnClientConnected;
+		fwEvent<const fx::ClientSharedPtr&> OnClientAssignNetId;
 
 	private:
 		uint16_t m_hostNetId;

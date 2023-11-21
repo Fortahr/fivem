@@ -416,19 +416,15 @@ static InitFunction initFunction([]()
 
 		g_reassemblySink.instance = instance;
 		rac->SetSink(&g_reassemblySink);
-		
-		auto clientRegistry = instance->GetComponent<fx::ClientRegistry>();
 
-		clientRegistry->OnClientCreated.Connect([rac](const fx::ClientSharedPtr& client)
+		auto clientRegistry = instance->GetComponent<fx::ClientRegistry>();
+		
+		clientRegistry->OnClientAssignNetId.Connect([rac](const fx::ClientSharedPtr& client)
 		{
-			fx::Client* unsafeClient = client.get();
-			unsafeClient->OnAssignNetId.Connect([rac, unsafeClient]()
+			if (client->IsConnected())
 			{
-				if (unsafeClient->GetNetId() < 0xFFFF)
-				{
-					rac->RegisterTarget(unsafeClient->GetNetId());
-				}
-			});
+				rac->RegisterTarget(client->GetNetId());
+			}
 		});
 
 		clientRegistry->OnClientDropping.Connect([rac](const fx::ClientSharedPtr& client)

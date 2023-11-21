@@ -78,11 +78,6 @@ namespace fx
 		fx::ClientSharedPtr client = fx::ClientSharedPtr::Construct(guid);
 		fx::ClientWeakPtr weakClient(client);
 		
-		client->OnAssignNetId.Connect([this, weakClient]()
-		{
-			m_clientsByNetId[weakClient.lock()->GetNetId()] = weakClient;
-		});
-
 		client->OnAssignPeer.Connect([this, weakClient]()
 		{
 			auto client = weakClient.lock();
@@ -171,7 +166,7 @@ namespace fx
 			incrementId();
 		}
 
-		client->SetNetId(m_curNetId);
+		SetClientNetId(client, m_curNetId);
 		incrementId();
 	}
 
@@ -225,6 +220,17 @@ namespace fx
 
 		// trigger connection handlers
 		OnClientConnected(client);
+	}
+
+	void ClientRegistry::SetClientNetId(const fx::ClientSharedPtr& client, uint32_t netId)
+	{
+		// TODO: do we need to clear the previous one?
+		// m_clientsByNetId[client->GetNetId()].reset();
+
+		client->SetNetId(netId);
+		m_clientsByNetId[netId] = client;
+
+		OnClientAssignNetId(client);
 	}
 
 	fx::ClientSharedPtr ClientRegistry::GetHost()

@@ -129,14 +129,17 @@ namespace fx
 
 	class SERVER_IMPL_EXPORT Client : public ComponentHolderImpl<Client>, public se::PrincipalSource
 	{
+		friend class ClientRegistry;
+
 	public:
 		Client(const std::string& guid);
 
 		void SetPeer(int peer, const net::PeerAddress& peerAddress);
 
-		void SetNetId(uint32_t netId);
-
-		void SetNetBase(uint32_t netBase);
+		inline void SetNetBase(uint32_t netBase)
+		{
+			m_netBase = netBase;
+		}
 
 		// updates the last-seen timer
 		void Touch();
@@ -345,13 +348,19 @@ namespace fx
 
 		void SendPacket(int channel, const net::Buffer& buffer, NetPacketType flags = NetPacketType_Unreliable);
 
-		fwEvent<> OnAssignNetId;
 		fwEvent<> OnAssignPeer;
 		fwEvent<> OnAssignTcpEndPoint;
 		fwEvent<> OnAssignConnectionToken;
 
 		fwEvent<> OnCreatePed;
 
+	private:
+		inline void SetNetId(uint32_t netId)
+		{
+			m_netId = netId;
+
+			UpdateCachedPrincipalValues();
+		}
 
 	private:
 		inline void UpdateCachedPrincipalValues()
