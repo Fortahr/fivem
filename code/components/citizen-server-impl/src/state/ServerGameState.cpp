@@ -4272,12 +4272,12 @@ void ServerGameState::AttachToObject(fx::ServerInstanceBase* instance)
 
 	instance->GetComponent<fx::ResourceManager>()->SetComponent(sbac);
 
-	auto creg = instance->GetComponent<fx::ClientRegistry>();
+	auto clientRegistry = instance->GetComponent<fx::ClientRegistry>();
 	m_globalBag = sbac->RegisterStateBag("global", true);
 	m_globalBag->SetOwningPeer(-1);
 	m_sbac = sbac;
 
-	creg->OnConnectedClient.Connect([this](fx::Client* client)
+	clientRegistry->OnClientConnected.Connect([this](const ClientSharedPtr& client)
 	{
 		if (!fx::IsOneSync())
 		{

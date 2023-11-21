@@ -599,9 +599,9 @@ void ExtCommerceComponent::AttachToObject(fx::ServerInstanceBase* instance)
 
 		auto clientRegistry = instance->GetComponent<fx::ClientRegistry>();
 
-		clientRegistry->OnConnectedClient.Connect([this](fx::Client* client)
+		clientRegistry->OnClientConnected.Connect([this](const fx::ClientSharedPtr& client)
 		{
-			this->OnClientConnected(client);
+			this->OnClientConnected(client.get());
 		});
 	});
 }

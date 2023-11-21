@@ -231,7 +231,8 @@ static InitFunction initFunction([]()
 				g_playerListData.erase(guid);
 			});
 		});
-		clientRegistry->OnConnectedClient.Connect([](fx::Client* client)
+
+		clientRegistry->OnClientConnected.Connect([](const fx::ClientSharedPtr& client)
 		{
 			std::unique_lock lock(g_playerListDataMutex);
 			g_playerListData[client->GetGuid()].connectionState = "LOADING";

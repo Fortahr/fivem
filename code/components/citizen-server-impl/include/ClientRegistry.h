@@ -263,8 +263,7 @@ namespace fx
 		virtual void AttachToObject(ServerInstanceBase* instance) override;
 
 		fwEvent<const fx::ClientSharedPtr&> OnClientCreated;
-
-		fwEvent<Client*> OnConnectedClient;
+		fwEvent<const fx::ClientSharedPtr&> OnClientConnected;
 
 	private:
 		uint16_t m_hostNetId;
