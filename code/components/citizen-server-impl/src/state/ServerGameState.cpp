@@ -261,7 +261,7 @@ sync::SyncEntityState::SyncEntityState()
 
 }
 
-static auto CreateSyncData(ServerGameState* state, const fx::ClientSharedPtr& client)
+std::shared_ptr<GameStateClientData> ServerGameState::CreateSyncData(const fx::ClientSharedPtr& client)
 {
 	auto lock = client->AcquireSyncDataCreationLock();
 
@@ -277,7 +277,7 @@ static auto CreateSyncData(ServerGameState* state, const fx::ClientSharedPtr& cl
 
 	std::weak_ptr<GameStateClientData> weakData(data);
 
-	auto setupBag = [weakClient, weakData, state]()
+	auto setupBag = [weakClient, weakData, this]()
 	{
 		auto client = weakClient.lock();
 		auto data = weakData.lock();
@@ -286,7 +286,7 @@ static auto CreateSyncData(ServerGameState* state, const fx::ClientSharedPtr& cl
 		{
 			if (client->GetNetId() < 0xFFFF)
 			{
-				data->playerBag = state->GetStateBags()->RegisterStateBag(fmt::sprintf("player:%d", client->GetNetId()));
+				data->playerBag = this->GetStateBags()->RegisterStateBag(fmt::sprintf("player:%d", client->GetNetId()));
 
 				if (fx::IsBigMode())
 				{
@@ -331,27 +331,15 @@ static auto CreateSyncData(ServerGameState* state, const fx::ClientSharedPtr& cl
 	return data;
 }
 
-inline std::shared_ptr<GameStateClientData> GetClientDataUnlocked(ServerGameState* state, const fx::ClientSharedPtr& client)
+std::shared_ptr<GameStateClientData> ServerGameState::GetOrCreateClientDataUnlocked(const fx::ClientSharedPtr& client)
 {
-	// NOTE: static_pointer_cast typically will lead to an unneeded refcount increment+decrement
-	// Doing this makes it so that there's only *one* increment for the fast case.
-#ifndef _MSC_VER
-	auto data = std::static_pointer_cast<GameStateClientData>(client->GetSyncData());
-#else
-	auto data = std::shared_ptr<GameStateClientData>{ reinterpret_cast<std::shared_ptr<GameStateClientData>&&>(client->GetSyncData()) };
-#endif
-
-	if (!data)
-	{
-		data = CreateSyncData(state, client);
-	}
-
-	return data;
+	std::shared_ptr<GameStateClientData> data(std::move(client->GetSyncData()));
+	return data ? std::move(data) : CreateSyncData(client);
 }
 
-inline std::tuple<std::unique_lock<std::mutex>, std::shared_ptr<GameStateClientData>> GetClientData(ServerGameState* state, const fx::ClientSharedPtr& client)
+std::tuple<std::unique_lock<std::mutex>, std::shared_ptr<GameStateClientData>> ServerGameState::GetOrCreateClientData(const fx::ClientSharedPtr& client)
 {
-	auto val = GetClientDataUnlocked(state, client);
+	auto val = GetOrCreateClientDataUnlocked(client);
 
 	if (!val)
 	{
@@ -366,12 +354,6 @@ inline uint32_t MakeEntityHandle(uint16_t objectId)
 {
 	return objectId;
 }
-
-std::tuple<std::unique_lock<std::mutex>, std::shared_ptr<GameStateClientData>> ServerGameState::ExternalGetClientData(const fx::ClientSharedPtr& client)
-{
-	return GetClientData(this, client);
-}
-
 
 static const char* PopTypeToString(fx::sync::ePopType type)
 {
@@ -1025,7 +1007,7 @@ void ServerGameState::Tick(fx::ServerInstanceBase* instance)
 			break;
 		}
 
-		auto clientDataUnlocked = GetClientDataUnlocked(this, client);
+		auto clientDataUnlocked = GetOrCreateClientDataUnlocked(client);
 
 		sync::SyncEntityPtr playerEntity;
 		{
@@ -1436,7 +1418,7 @@ void ServerGameState::Tick(fx::ServerInstanceBase* instance)
 		static fx::object_pool<sync::SyncCommandList, 512 * 1024> syncPool;
 		auto scl = shared_reference<sync::SyncCommandList, &syncPool>::Construct(m_frameIndex);
 
-		auto clientDataUnlocked = GetClientDataUnlocked(this, client);
+		auto clientDataUnlocked = GetOrCreateClientDataUnlocked(client);
 
 		sync::SyncEntityPtr playerEntity;
 		{
@@ -1545,7 +1527,7 @@ void ServerGameState::Tick(fx::ServerInstanceBase* instance)
 
 							if (ownerNetId != ~0U)
 							{
-								auto [clientDataLock, clientData] = GetClientData(this, client);
+								auto [clientDataLock, clientData] = GetOrCreateClientData(client);
 
 								auto plit = clientData->playersToSlots.find(ownerNetId);
 								bool hasCreatedPlayer = (plit != clientData->playersToSlots.end());
@@ -1577,7 +1559,7 @@ void ServerGameState::Tick(fx::ServerInstanceBase* instance)
 								*/
 										evMan->QueueEvent2("playerLeftScope", {}, std::map<std::string, std::string>{ { "player", fmt::sprintf("%d", ownerNetId) }, { "for", fmt::sprintf("%d", client->GetNetId()) } });
 
-										auto oldClientData = GetClientDataUnlocked(this, ownerRef);
+										auto oldClientData = GetOrCreateClientDataUnlocked(ownerRef);
 
 										if (oldClientData->playerBag)
 										{
@@ -1656,7 +1638,7 @@ void ServerGameState::Tick(fx::ServerInstanceBase* instance)
 						const auto entityClient = entity->GetClient();
 						if (entityClient)
 						{
-							auto [clientDataLock, clientData] = GetClientData(this, client);
+							auto [clientDataLock, clientData] = GetOrCreateClientData(client);
 
 							auto plit = clientData->playersToSlots.find(entityClient->GetNetId());
 							bool hasCreatedPlayer = (plit != clientData->playersToSlots.end());
@@ -1700,7 +1682,7 @@ void ServerGameState::Tick(fx::ServerInstanceBase* instance)
 
 									sec->TriggerClientEvent("onPlayerJoining", fmt::sprintf("%d", client->GetNetId()), entityClient->GetNetId(), entityClient->GetName(), slotId);
 
-									auto ecData = GetClientDataUnlocked(this, entityClient);
+									auto ecData = GetOrCreateClientDataUnlocked(entityClient);
 
 									if (ecData->playerBag)
 									{
@@ -2143,7 +2125,7 @@ void ServerGameState::UpdateEntities()
 					auto camQuat = glm::quat{ camRotation };
 					auto rot = glm::toMat4(camQuat);
 
-					auto[dataLock, data] = GetClientData(this, client);
+					auto[dataLock, data] = GetOrCreateClientData(client);
 					data->viewMatrix = glm::inverse(glm::translate(glm::identity<glm::mat4>(), camTranslate) * rot);
 				}
 			}
@@ -2215,7 +2197,7 @@ void ServerGameState::SendWorldGrid(void* entry /* = nullptr */, const fx::Clien
 {
 	auto sendWorldGrid = [this, entry](const fx::ClientSharedPtr& client)
 	{
-		auto data = GetClientDataUnlocked(this, client);
+		auto data = GetOrCreateClientDataUnlocked(client);
 
 		decltype(m_worldGrids)::iterator gridRef;
 
@@ -2326,7 +2308,7 @@ void ServerGameState::UpdateWorldGrid(fx::ServerInstanceBase* instance)
 		auto creg = m_instance->GetComponent<fx::ClientRegistry>();
 		creg->ForAllClients([this, &liveBuckets](const fx::ClientSharedPtr& client)
 		{
-			auto data = GetClientDataUnlocked(this, client);
+			auto data = GetOrCreateClientDataUnlocked(client);
 			liveBuckets.insert(data->routingBucket);
 		});
 
@@ -2371,7 +2353,7 @@ void ServerGameState::UpdateWorldGrid(fx::ServerInstanceBase* instance)
 			return;
 		}
 
-		auto data = GetClientDataUnlocked(this, client);
+		auto data = GetOrCreateClientDataUnlocked(client);
 
 		sync::SyncEntityPtr playerEntity;
 		{
@@ -2592,7 +2574,7 @@ void ServerGameState::ReassignEntityInner(uint32_t entityHandle, const fx::Clien
 
 		if (oldClientRef)
 		{
-			auto [lock, sourceData] = GetClientData(this, oldClientRef);
+			auto [lock, sourceData] = GetOrCreateClientData(oldClientRef);
 			sourceData->objectIds.erase(entityHandle);
 		}
 	}
@@ -2600,7 +2582,7 @@ void ServerGameState::ReassignEntityInner(uint32_t entityHandle, const fx::Clien
 	{
 		if (targetClient)
 		{
-			auto [lock, targetData] = GetClientData(this, targetClient);
+			auto [lock, targetData] = GetOrCreateClientData(targetClient);
 			targetData->objectIds.insert(entityHandle);
 		}
 	}
@@ -2624,7 +2606,7 @@ void ServerGameState::ReassignEntityInner(uint32_t entityHandle, const fx::Clien
 			}
 		}
 
-		auto [lock, data] = GetClientData(this, crClient);
+		auto [lock, data] = GetOrCreateClientData(crClient);
 		if (auto entIt = data->syncedEntities.find(uniqPair); entIt != data->syncedEntities.end())
 		{
 			entIt->second.forceUpdate = true;
@@ -2756,7 +2738,7 @@ bool ServerGameState::MoveEntityToCandidate(const fx::sync::SyncEntityPtr& entit
 
 				float distance = std::numeric_limits<float>::max();
 
-				auto data = GetClientDataUnlocked(this, tgtClient);
+				auto data = GetOrCreateClientDataUnlocked(tgtClient);
 				sync::SyncEntityPtr playerEntity;
 				{
 					std::shared_lock _lock(data->playerEntityMutex);
@@ -2823,7 +2805,7 @@ void ServerGameState::HandleClientDrop(const fx::ClientSharedPtr& client, uint16
 	{
 		clientRegistry->ForAllClients([this, &client, netId](const fx::ClientSharedPtr& tgtClient)
 		{
-			auto [lock, clientData] = GetClientData(this, tgtClient);
+			auto [lock, clientData] = GetOrCreateClientData(tgtClient);
 
 			auto si = clientData->playersToSlots.find(netId);
 
@@ -2896,7 +2878,7 @@ void ServerGameState::HandleClientDrop(const fx::ClientSharedPtr& client, uint16
 
 	{
 		// remove object IDs from sent map
-		auto [ lock, data ] = GetClientData(this, client);
+		auto [ lock, data ] = GetOrCreateClientData(client);
 
 		std::unique_lock objectIdsLock(m_objectIdsMutex);
 
@@ -2943,7 +2925,7 @@ void ServerGameState::ClearClientFromWorldGrid(const fx::ClientSharedPtr& target
 		}
 	}
 
-	auto clientDataUnlocked = GetClientDataUnlocked(this, targetClient);
+	auto clientDataUnlocked = GetOrCreateClientDataUnlocked(targetClient);
 	auto slotId = targetClient->GetSlotId();
 	auto netId = targetClient->GetNetId();
 
@@ -3166,7 +3148,7 @@ void ServerGameState::FinalizeClone(const fx::ClientSharedPtr& client, const fx:
 					fx::ClientSharedPtr clientRef = entityRef->GetClient();
 					if (clientRef)
 					{
-						auto [lock, clientData] = GetClientData(this, clientRef);
+						auto [lock, clientData] = GetOrCreateClientData(clientRef);
 						clientData->objectIds.erase(objectId);
 					}
 				}
@@ -3266,7 +3248,7 @@ bool ServerGameState::ProcessClonePacket(const fx::ClientSharedPtr& client, rl::
 
 	// move this back down under
 	{
-		auto [lock, data] = GetClientData(this, client);
+		auto [lock, data] = GetOrCreateClientData(client);
 		data->playerId = playerId;
 		timestamp = data->syncTs;
 	}
@@ -3317,7 +3299,7 @@ bool ServerGameState::ProcessClonePacket(const fx::ClientSharedPtr& client, rl::
 				return false;
 			}
 
-			auto data = GetClientDataUnlocked(this, client);
+			auto data = GetOrCreateClientDataUnlocked(client);
 			entity->routingBucket = data->routingBucket;
 
 			createdHere = true;
@@ -3438,7 +3420,7 @@ bool ServerGameState::ProcessClonePacket(const fx::ClientSharedPtr& client, rl::
 	{
 		case sync::NetObjEntityType::Player:
 		{
-			auto data = GetClientDataUnlocked(this, client);
+			auto data = GetOrCreateClientDataUnlocked(client);
 			
 			std::unique_lock _lock(data->playerEntityMutex);
 			sync::SyncEntityPtr playerEntity = data->playerEntity.lock();
@@ -3479,7 +3461,7 @@ bool ServerGameState::ProcessClonePacket(const fx::ClientSharedPtr& client, rl::
 
 			// if the entity isn't added yet, the owner should be told of its deletion too
 			{
-				auto [lock, data] = GetClientData(this, client);
+				auto [lock, data] = GetOrCreateClientData(client);
 				data->entitiesToDestroy[MakeHandleUniqifierPair(objectId, uniqifier)] = { entity, { false, false } };
 			}
 		};
@@ -3488,7 +3470,7 @@ bool ServerGameState::ProcessClonePacket(const fx::ClientSharedPtr& client, rl::
 		// if we're in entity lockdown, validate the entity first
 		if (entity->type != sync::NetObjEntityType::Player)
 		{
-			auto clientData = GetClientDataUnlocked(this, client);
+			auto clientData = GetOrCreateClientDataUnlocked(client);
 			std::shared_lock _(m_routingDataMutex);
 
 			auto entityLockdownMode = m_entityLockdownMode;
@@ -3520,7 +3502,7 @@ bool ServerGameState::ProcessClonePacket(const fx::ClientSharedPtr& client, rl::
 
 		// well, yeah, it's their entity, they have it
 		{
-			auto [lock, data] = GetClientData(this, client);
+			auto [lock, data] = GetOrCreateClientData(client);
 			auto identPair = MakeHandleUniqifierPair(objectId, uniqifier);
 
 			data->syncedEntities[identPair] = { 0ms, 10ms, entity, false, true, false };
@@ -3582,7 +3564,7 @@ bool ServerGameState::ProcessClonePacket(const fx::ClientSharedPtr& client, rl::
 	else
 	{
 		// erase from pending create list if we're syncing
-		auto [lock, data] = GetClientData(this, client);
+		auto [lock, data] = GetOrCreateClientData(client);
 		data->pendingCreates.erase(MakeHandleUniqifierPair(objectId, uniqifier));
 	}
 
@@ -3756,7 +3738,7 @@ void ServerGameState::ParseAckPacket(const fx::ClientSharedPtr& client, net::Buf
 					{
 						entity->deletedFor.reset(client->GetSlotId());
 						
-						auto [lock, clientData] = GetClientData(this, client);
+						auto [lock, clientData] = GetOrCreateClientData(client);
 						if (auto secIt = clientData->syncedEntities.find(MakeHandleUniqifierPair(objectId, uniqifier)); secIt != clientData->syncedEntities.end())
 						{
 							secIt->second.hasCreated = true;
@@ -3771,7 +3753,7 @@ void ServerGameState::ParseAckPacket(const fx::ClientSharedPtr& client, net::Buf
 				auto objectId = msgBuf.Read<uint16_t>(13);
 				auto uniqifier = msgBuf.Read<uint16_t>(16);
 
-				auto [lock, clientData] = GetClientData(this, client);
+				auto [lock, clientData] = GetOrCreateClientData(client);
 				clientData->entitiesToDestroy.erase(MakeHandleUniqifierPair(objectId, uniqifier));
 
 				GS_LOG("handle remove ack for [obj:%d:%d]\n", objectId, uniqifier);
@@ -3796,7 +3778,7 @@ void ServerGameState::ParseClonePacket(const fx::ClientSharedPtr& client, net::B
 	rl::MessageBuffer ackPacket;
 
 	{
-		auto[lock, clientData] = GetClientData(this, client);
+		auto[lock, clientData] = GetOrCreateClientData(client);
 
 		ackPacket = std::move(clientData->ackBuffer);
 	}
@@ -3806,7 +3788,7 @@ void ServerGameState::ParseClonePacket(const fx::ClientSharedPtr& client, net::B
 		uint64_t fidx = 0;
 
 		{
-			auto [lock, data] = GetClientData(this, client);
+			auto [lock, data] = GetOrCreateClientData(client);
 			fidx = data->fidx;
 		}
 
@@ -3861,7 +3843,7 @@ void ServerGameState::ParseClonePacket(const fx::ClientSharedPtr& client, net::B
 			ackPacket.Write(32, newTs);
 			ackPacketWrapper.flush();
 
-			auto [lock, data] = GetClientData(this, client);
+			auto [lock, data] = GetOrCreateClientData(client);
 			auto oldTs = data->ackTs;
 
 			if (!oldTs || oldTs < newTs)
@@ -3875,7 +3857,7 @@ void ServerGameState::ParseClonePacket(const fx::ClientSharedPtr& client, net::B
 		case 6: // set index
 		{
 			auto newIndex = msgBuf.Read<uint32_t>(32);
-			auto [lock, data] = GetClientData(this, client);
+			auto [lock, data] = GetOrCreateClientData(client);
 			data->fidx = newIndex;
 
 			break;
@@ -3893,7 +3875,7 @@ void ServerGameState::ParseClonePacket(const fx::ClientSharedPtr& client, net::B
 	FlushBuffer(ackPacket, HashRageString("msgPackedAcks"), fidx, client, nullptr, true);
 
 	{
-		auto [lock, clientData] = GetClientData(this, client);
+		auto [lock, clientData] = GetOrCreateClientData(client);
 
 		clientData->ackBuffer = std::move(ackPacket);
 	}
@@ -3905,7 +3887,7 @@ void ServerGameState::SendObjectIds(const fx::ClientSharedPtr& client, int numId
 	std::vector<int> ids;
 
 	{
-		auto [lock, data] = GetClientData(this, client);
+		auto [lock, data] = GetOrCreateClientData(client);
 		std::unique_lock objectIdsLock(m_objectIdsMutex);
 
 		int id = 1;
@@ -4107,7 +4089,7 @@ private:
 
 void ServerGameState::SendArrayData(const fx::ClientSharedPtr& client)
 {
-	auto data = GetClientDataUnlocked(this, client);
+	auto data = GetOrCreateClientDataUnlocked(client);
 
 	decltype(m_arrayHandlers)::iterator arrayRef;
 
@@ -4131,7 +4113,7 @@ void ServerGameState::SendArrayData(const fx::ClientSharedPtr& client)
 void ServerGameState::HandleArrayUpdate(const fx::ClientSharedPtr& client, net::Buffer& buffer)
 {
 	auto arrayIndex = buffer.Read<uint8_t>();
-	auto data = GetClientDataUnlocked(this, client);
+	auto data = GetOrCreateClientDataUnlocked(client);
 
 	decltype(m_arrayHandlers)::iterator gridRef;
 
@@ -4218,7 +4200,7 @@ ServerGameState::ArrayHandlerData::ArrayHandlerData()
 
 auto ServerGameState::GetEntityLockdownMode(const fx::ClientSharedPtr& client) -> EntityLockdownMode
 {
-	auto clientData = GetClientDataUnlocked(this, client);
+	auto clientData = GetOrCreateClientDataUnlocked(client);
 	std::shared_lock _(m_routingDataMutex);
 
 	if (auto rbmdIt = m_routingData.find(clientData->routingBucket); rbmdIt != m_routingData.end())
@@ -4344,7 +4326,7 @@ void ServerGameState::AttachToObject(fx::ServerInstanceBase* instance)
 		std::shared_lock entitesByIdLock(m_entitiesByIdMutex);
 		m_instance->GetComponent<fx::ClientRegistry>()->ForAllClients([this](const fx::ClientSharedPtr& client)
 		{
-			auto [lock, data] = GetClientData(this, client);
+			auto [lock, data] = GetOrCreateClientData(client);
 			int used = 0;
 
 			{
@@ -4884,7 +4866,7 @@ void CWeaponDamageEvent::SetTargetPlayers(fx::ServerGameState* sgs, const std::v
 			{
 				if (auto client = clientRegistry->GetClientByNetID(player))
 				{
-					auto clientDataUnlocked = GetClientDataUnlocked(sgs, client);
+					auto clientDataUnlocked = sgs->GetOrCreateClientDataUnlocked(client);
 
 					fx::sync::SyncEntityPtr playerEntity;
 					{
@@ -5821,7 +5803,7 @@ void CWeaponDamageEvent::SetTargetPlayers(fx::ServerGameState* sgs, const std::v
 			{
 				if (auto client = clientRegistry->GetClientByNetID(player))
 				{
-					auto clientDataUnlocked = GetClientDataUnlocked(sgs, client);
+					auto clientDataUnlocked = sgs->GetOrCreateClientDataUnlocked(client);
 
 					fx::sync::SyncEntityPtr playerEntity;
 					{
@@ -6559,7 +6541,7 @@ inline bool RequestControlHandler(fx::ServerGameState* sgs, const fx::ClientShar
 
 	// if the sender isn't in the same bucket as the entity, nope either
 	{
-		auto clientData = GetClientDataUnlocked(sgs, client);
+		auto clientData = sgs->GetOrCreateClientDataUnlocked(client);
 		
 		if (clientData->routingBucket != entity->routingBucket)
 		{
@@ -6971,7 +6953,7 @@ static InitFunction initFunction([]()
 			netBuffer.Write<uint16_t>(client->GetNetId());
 			buffer.ReadTo(netBuffer, buffer.GetRemainingBytes());
 
-			auto sourceClientData = GetClientDataUnlocked(sgs.GetRef(), client);
+			auto sourceClientData = sgs->GetOrCreateClientDataUnlocked(client);
 			auto bucket = sourceClientData->routingBucket;
 
 			auto clientRegistry = instance->GetComponent<fx::ClientRegistry>();
@@ -6984,7 +6966,7 @@ static InitFunction initFunction([]()
 
 					if (targetClient)
 					{
-						auto targetClientData = GetClientDataUnlocked(sgs.GetRef(), targetClient);
+						auto targetClientData = sgs->GetOrCreateClientDataUnlocked(targetClient);
 
 						if (targetClientData->routingBucket == bucket)
 						{
@@ -7067,7 +7049,7 @@ static InitFunction initFunction([]()
 			}
 
 			// process
-			auto [lock, clientData] = GetClientData(sgs.GetRef(), client);
+			auto [lock, clientData] = sgs->GetOrCreateClientData(client);
 
 			
 			const auto& ref = clientData->frameStates[frameIndex];
@@ -7166,7 +7148,7 @@ static InitFunction initFunction([]()
 					const auto firstMissingFrame = buffer.Read<uint64_t>();
 					const auto lastMissingFrame = buffer.Read<uint64_t>();
 
-					auto [lock, clientData] = GetClientData(sgs.GetRef(), client);
+					auto [lock, clientData] = sgs->GetOrCreateClientData(client);
 					auto& states = clientData->frameStates;
 
 					eastl::fixed_map<uint16_t, uint64_t, 64> lastSentCorrections;
@@ -7226,7 +7208,7 @@ static InitFunction initFunction([]()
 					}
 				}
 
-				auto [lock, clientData] = GetClientData(sgs.GetRef(), client);
+				auto [lock, clientData] = sgs->GetOrCreateClientData(client);
 				auto& states = clientData->frameStates;
 
 				if (auto frameIt = states.find(thisFrame); frameIt != states.end())

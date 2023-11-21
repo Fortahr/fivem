@@ -294,7 +294,7 @@ static InitFunction initFunction([]()
 								fx::sync::SyncEntityPtr playerEntity;
 
 								{
-									auto [lock, data] = gameState->ExternalGetClientData(tgtClient);
+									auto [lock, data] = gameState->GetOrCreateClientData(tgtClient);
 									playerEntity = data->playerEntity.lock();
 								}
 

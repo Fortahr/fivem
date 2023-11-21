@@ -1299,7 +1299,13 @@ public:
 
 	uint32_t MakeScriptHandle(const fx::sync::SyncEntityPtr& ptr);
 
-	std::tuple<std::unique_lock<std::mutex>, std::shared_ptr<GameStateClientData>> ExternalGetClientData(const fx::ClientSharedPtr& client);
+private:
+	std::shared_ptr<GameStateClientData> CreateSyncData(const fx::ClientSharedPtr& client);
+
+public:
+	std::shared_ptr<GameStateClientData> GetOrCreateClientDataUnlocked(const fx::ClientSharedPtr& client);
+
+	std::tuple<std::unique_lock<std::mutex>, std::shared_ptr<GameStateClientData>> GetOrCreateClientData(const fx::ClientSharedPtr& client);
 
 	void ForAllEntities(const std::function<void(sync::Entity*)>& cb);
 

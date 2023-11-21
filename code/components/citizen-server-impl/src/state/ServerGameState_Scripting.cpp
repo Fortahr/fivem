@@ -1329,7 +1329,7 @@ static void Init()
 		// get the server's game state
 		auto gameState = instance->GetComponent<fx::ServerGameState>();
 
-		auto [lock, clientData] = gameState->ExternalGetClientData(client);
+		auto [lock, clientData] = gameState->GetOrCreateClientData(client);
 		return int(clientData->routingBucket);
 	}));
 
@@ -1350,7 +1350,7 @@ static void Init()
 				// get the server's game state
 				auto gameState = instance->GetComponent<fx::ServerGameState>();
 
-				auto [lock, clientData] = gameState->ExternalGetClientData(client);
+				auto [lock, clientData] = gameState->GetOrCreateClientData(client);
 				gameState->ClearClientFromWorldGrid(client);
 				clientData->routingBucket = bucket;
 				
@@ -1553,7 +1553,7 @@ static void Init()
 				// get the server's game state
 				auto gameState = instance->GetComponent<fx::ServerGameState>();
 
-				auto [lock, clientData] = gameState->ExternalGetClientData(client);
+				auto [lock, clientData] = gameState->GetOrCreateClientData(client);
 				clientData->playerCullingRadius = radius * radius;
 			}
 		}
