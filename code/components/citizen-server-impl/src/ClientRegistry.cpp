@@ -78,62 +78,6 @@ namespace fx
 		fx::ClientSharedPtr client = fx::ClientSharedPtr::Construct(guid);
 		fx::ClientWeakPtr weakClient(client);
 		
-		client->OnAssignPeer.Connect([this, weakClient]()
-		{
-			auto client = weakClient.lock();
-
-			if (!client)
-			{
-				return;
-			}
-
-			m_clientsByPeer[client->GetPeer()] = weakClient;
-
-			if (!IsOneSync())
-			{
-				return;
-			}
-
-			// reconnecting clients will assign a peer again, but should *not* be assigned a new slot ID
-			if (client->GetSlotId() != -1)
-			{
-				return;
-			}
-
-			std::lock_guard clientGuard(m_clientSlotMutex);
-			for (int slot = m_clientsBySlotId.size() - 1; slot >= 0; slot--)
-			{
-				// 31 is a special case
-				if (slot == 31)
-				{
-					continue;
-				}
-
-				if (!m_clientsBySlotId[slot])
-				{
-					client->SetSlotId(slot);
-					m_clientsBySlotId[slot] = weakClient;
-					break;
-				}
-			}
-		});
-
-		client->OnAssignTcpEndPoint.Connect([this, weakClient]()
-		{
-			m_clientsByTcpEndPoint[weakClient.lock()->GetTcpEndPoint()] = weakClient;
-		});
-
-		client->OnAssignConnectionToken.Connect([this, weakClient]()
-		{
-			auto client = weakClient.lock();
-
-			if (client)
-			{
-				m_clientsByConnectionToken[client->GetConnectionToken()] = weakClient;
-				m_clientsByConnectionTokenHash[HashString(client->GetConnectionToken().c_str())] = weakClient;
-			}
-		});
-
 		OnClientCreated(client);
 
 		{
@@ -220,6 +164,55 @@ namespace fx
 
 		// trigger connection handlers
 		OnClientConnected(client);
+	}
+
+	void ClientRegistry::SetClientPeer(const fx::ClientSharedPtr& client, int peer, const net::PeerAddress& peerAddress)
+	{
+		m_clientsByPeer[client->GetPeer()].reset();
+		m_clientsByPeer[peer] = client;
+
+		client->SetPeer(peer, peerAddress);
+
+		if (!IsOneSync())
+		{
+			return;
+		}
+
+		// reconnecting clients will assign a peer again, but should *not* be assigned a new slot ID
+		if (client->GetSlotId() != -1)
+		{
+			return;
+		}
+
+		std::lock_guard clientGuard(m_clientSlotMutex);
+		for (size_t slot = m_clientsBySlotId.size() - 1; slot != size_t(-1); slot--)
+		{
+			// 31 is a special case
+			if (slot == 31)
+			{
+				continue;
+			}
+
+			if (!m_clientsBySlotId[slot])
+			{
+				client->SetSlotId(slot);
+				m_clientsBySlotId[slot] = client;
+				break;
+			}
+		}
+	}
+
+	void ClientRegistry::SetClientTcpEndPoint(const fx::ClientSharedPtr& client, const std::string& value)
+	{
+		client->SetTcpEndPoint(value);
+		m_clientsByTcpEndPoint[value] = client;
+	}
+
+	void ClientRegistry::SetClientConnectionToken(const fx::ClientSharedPtr& client, const std::string& value)
+	{
+		client->SetConnectionToken(value);
+		m_clientsByConnectionToken[client->GetConnectionToken()] = client;
+		m_clientsByConnectionTokenHash[HashString(client->GetConnectionToken().c_str())] = client;
 	}
 
 	void ClientRegistry::SetClientNetId(const fx::ClientSharedPtr& client, uint32_t netId)

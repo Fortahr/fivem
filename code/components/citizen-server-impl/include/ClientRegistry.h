@@ -212,6 +212,9 @@ namespace fx
 			return ptr;
 		}
 
+		void SetClientPeer(const fx::ClientSharedPtr& client, int peer, const net::PeerAddress& peerAddress);
+		void SetClientTcpEndPoint(const fx::ClientSharedPtr& client, const std::string& value);
+		void SetClientConnectionToken(const fx::ClientSharedPtr& client, const std::string& value);
 		void SetClientNetId(const fx::ClientSharedPtr& client, uint32_t netId);
 
 		inline bool HasClientByConnectionTokenHash(uint32_t hash)

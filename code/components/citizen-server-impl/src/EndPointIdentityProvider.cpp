@@ -14,12 +14,15 @@
 #include <HttpServer.h>
 
 #include <TcpListenManager.h>
+#include <ClientRegistry.h>
 
 static InitFunction initFunction([]()
 {
 	static struct EndPointIdProvider : public fx::ServerIdentityProviderBase
 	{
 		tbb::concurrent_unordered_map<std::string, bool> allowedByPolicyCache;
+
+		fx::ClientRegistry* m_registry;
 
 		virtual std::string GetIdentifierPrefix() override
 		{
@@ -56,7 +59,7 @@ static InitFunction initFunction([]()
 			else
 			{
 				clientPtr->AddIdentifier("ip:" + realIP);
-				clientPtr->SetTcpEndPoint(realIP);
+				m_registry->SetClientTcpEndPoint(clientPtr, realIP);
 			}
 
 			cb({});
@@ -82,7 +85,7 @@ static InitFunction initFunction([]()
 				auto rSourceIP = sourceIP.substr(0, sourceIP.find_last_of(':'));
 
 				clientPtr->AddIdentifier("ip:" + rSourceIP);
-				clientPtr->SetTcpEndPoint(rSourceIP);
+				clientPtr->GetRegistry().SetClientTcpEndPoint(clientPtr, rSourceIP);
 
 				cb({});
 			};
@@ -132,4 +135,9 @@ static InitFunction initFunction([]()
 	} idp;
 
 	fx::RegisterServerIdentityProvider(&idp);
+
+	fx::ServerInstanceBase::OnServerCreate.Connect([](fx::ServerInstanceBase* instance)
+	{
+		idp.m_registry = instance->GetComponent<fx::ClientRegistry>().GetRef();
+	});
 }, 150);

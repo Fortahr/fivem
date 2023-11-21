@@ -134,8 +134,6 @@ namespace fx
 	public:
 		Client(const std::string& guid);
 
-		void SetPeer(int peer, const net::PeerAddress& peerAddress);
-
 		inline void SetNetBase(uint32_t netBase)
 		{
 			m_netBase = netBase;
@@ -201,18 +199,9 @@ namespace fx
 			return m_tcpEndPoint;
 		}
 
-		void SetTcpEndPoint(const std::string& value);
-
 		inline const std::string& GetConnectionToken() const
 		{
 			return m_connectionToken;
-		}
-
-		inline void SetConnectionToken(const std::string& value)
-		{
-			m_connectionToken = value;
-
-			OnAssignConnectionToken();
 		}
 
 		inline std::chrono::milliseconds GetFirstSeen() const
@@ -348,10 +337,6 @@ namespace fx
 
 		void SendPacket(int channel, const net::Buffer& buffer, NetPacketType flags = NetPacketType_Unreliable);
 
-		fwEvent<> OnAssignPeer;
-		fwEvent<> OnAssignTcpEndPoint;
-		fwEvent<> OnAssignConnectionToken;
-
 		fwEvent<> OnCreatePed;
 
 	private:
@@ -362,7 +347,22 @@ namespace fx
 			UpdateCachedPrincipalValues();
 		}
 
-	private:
+		inline void SetPeer(int peer, const net::PeerAddress& peerAddress)
+		{
+			m_peer = peer;
+			m_peerAddress = peerAddress;
+		}
+
+		inline void SetTcpEndPoint(const std::string& value)
+		{
+			m_tcpEndPoint = value;
+		}
+
+		inline void SetConnectionToken(const std::string& value)
+		{
+			m_connectionToken = value;
+		}
+
 		inline void UpdateCachedPrincipalValues()
 		{
 			m_principals = {};

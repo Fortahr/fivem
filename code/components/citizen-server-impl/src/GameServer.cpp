@@ -679,7 +679,7 @@ namespace fx
 
 					client->Touch();
 
-					client->SetPeer(peerId, peer->GetAddress());
+					m_clientRegistry->SetClientPeer(client, peerId, peer->GetAddress());
 
 					if (IsOneSync())
 					{
