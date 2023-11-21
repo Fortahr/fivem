@@ -1,5 +1,7 @@
 #pragma once
 
+#include <StdInc.h>
+
 #include <NetAddress.h>
 #include <NetBuffer.h>
 
@@ -90,15 +92,27 @@ namespace fx
 	}
 
 	template<typename T>
-	T& AnyCast(const std::shared_ptr<AnyBase>& base)
+	T& AnyCast(AnyBase* base)
 	{
-		if (!base || base->GetType() != HashString(boost::typeindex::type_id<T>().raw_name()))
+		if (!base || base->GetType() != constexpr(HashString(boost::typeindex::type_id<T>().raw_name())))
 		{
 			throw std::bad_any_cast();
 		}
 
-		auto entry = std::static_pointer_cast<AnyHolder<T>>(base);
+		auto entry = static_cast<AnyHolder<T>*>(base);
 		return entry->GetData();
+	}
+
+	template<typename T>
+	T& AnyCast(const std::shared_ptr<AnyBase>& base)
+	{
+		return AnyCast<T>(base.get());
+	}
+
+	template<typename T>
+	const T& AnyCast(const std::shared_ptr<const AnyBase>& base)
+	{
+		return AnyCast<T>(const_cast<AnyBase*>(base.get()));
 	}
 
 	namespace sync
@@ -110,18 +124,8 @@ namespace fx
 		};
 	}
 
-	struct gs_peer_deleter
-	{
-		inline void operator()(int* data)
-		{
-			gscomms_execute_callback_on_net_thread([=]()
-			{
-				gscomms_reset_peer(*data);
-				delete data;
-			});
-		}
-	};
-
+	class ClientRegistry;
+	class GameStateClientData;
 
 	class SERVER_IMPL_EXPORT Client : public ComponentHolderImpl<Client>, public se::PrincipalSource
 	{
@@ -137,14 +141,19 @@ namespace fx
 		// updates the last-seen timer
 		void Touch();
 
-		bool IsDead();
+		bool IsDead() const;
 
-		inline uint32_t GetNetId()
+		inline bool IsConnected() const
+		{
+			return m_netId < 0xFFFF;
+		}
+
+		inline uint32_t GetNetId() const
 		{
 			return m_netId;
 		}
 
-		inline uint32_t GetSlotId()
+		inline uint32_t GetSlotId() const
 		{
 			return m_slotId;
 		}
@@ -154,27 +163,27 @@ namespace fx
 			m_slotId = slotId;
 		}
 
-		inline uint32_t GetNetBase()
+		inline uint32_t GetNetBase() const
 		{
 			return m_netBase;
 		}
 
-		inline const std::string& GetGuid()
+		inline const std::string& GetGuid() const
 		{
 			return m_guid;
 		}
 
-		inline const net::PeerAddress& GetAddress()
+		inline const net::PeerAddress& GetAddress() const
 		{
 			return m_peerAddress;
 		}
 
-		inline int GetPeer()
+		inline int GetPeer() const
 		{
-			return (m_peer) ? *m_peer.get() : 0;
+			return (m_peer) ? *m_peer : 0;
 		}
 
-		inline const std::string& GetName()	
+		inline const std::string& GetName() const
 		{
 			return m_name;
 		}
@@ -184,14 +193,14 @@ namespace fx
 			m_name = name;
 		}
 
-		inline const std::string& GetTcpEndPoint()
+		inline const std::string& GetTcpEndPoint() const
 		{
 			return m_tcpEndPoint;
 		}
 
 		void SetTcpEndPoint(const std::string& value);
 
-		inline const std::string& GetConnectionToken()
+		inline const std::string& GetConnectionToken() const
 		{
 			return m_connectionToken;
 		}
@@ -203,27 +212,27 @@ namespace fx
 			OnAssignConnectionToken();
 		}
 
-		inline std::chrono::milliseconds GetFirstSeen()
+		inline std::chrono::milliseconds GetFirstSeen() const
 		{
 			return m_firstSeen;
 		}
 
-		inline std::chrono::milliseconds GetLastSeen()
+		inline std::chrono::milliseconds GetLastSeen() const
 		{
 			return m_lastSeen;
 		}
 
-		inline const std::vector<std::string>& GetIdentifiers()
+		inline const std::vector<std::string>& GetIdentifiers() const
 		{
 			return m_identifiers;
 		}
 
-		inline const std::vector<std::string>& GetTokens()
+		inline const std::vector<std::string>& GetTokens() const
 		{
 			return m_tokens;
 		}
 
-		inline bool HasRouted()
+		inline bool HasRouted() const
 		{
 			return m_hasRouted;
 		}
@@ -263,13 +272,13 @@ namespace fx
 			}
 		}
 
-		inline std::shared_ptr<sync::ClientSyncDataBase> GetSyncData()
+		inline std::shared_ptr<GameStateClientData> GetSyncData() const
 		{
 			std::shared_lock _(m_syncDataMutex);
 			return m_syncData;
 		}
 
-		inline void SetSyncData(const std::shared_ptr<sync::ClientSyncDataBase>& ptr)
+		inline void SetSyncData(const std::shared_ptr<GameStateClientData>& ptr)
 		{
 			std::unique_lock _(m_syncDataMutex);
 			m_syncData = ptr;
@@ -311,9 +320,14 @@ namespace fx
 			m_clientNetworkMetricsRecvCallback = callback;
 		}
 
-		int GetPing();
+		int GetPing() const;
 
 		std::shared_ptr<AnyBase> GetData(const std::string& key);
+
+		inline std::shared_ptr<const AnyBase> GetData(const std::string& key) const
+		{
+			return std::move(GetData(key));
+		}
 
 		void SetDataRaw(const std::string& key, const std::shared_ptr<AnyBase>& data);
 
@@ -391,18 +405,18 @@ namespace fx
 		std::string m_tcpEndPoint;
 
 		// the client's ENet peer
-		std::unique_ptr<int, gs_peer_deleter> m_peer;
+		std::optional<int> m_peer;
 
 		// sync data
-		std::shared_ptr<sync::ClientSyncDataBase> m_syncData;
-		std::shared_mutex m_syncDataMutex;
+		std::shared_ptr<GameStateClientData> m_syncData;
+		mutable std::shared_mutex m_syncDataMutex;
 		std::mutex m_syncDataCreationMutex;
 
 		// whether the client has sent a routing msg once
 		bool m_hasRouted;
 
 		// an arbitrary set of data
-		std::shared_mutex m_userDataMutex;
+		mutable std::shared_mutex m_userDataMutex;
 		std::unordered_map<std::string, std::shared_ptr<AnyBase>> m_userData;
 
 		// principal values

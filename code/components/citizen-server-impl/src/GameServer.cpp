@@ -696,7 +696,7 @@ namespace fx
 					bool wasNew = false;
 					auto oldNetID = client->GetNetId();
 
-					if (client->GetNetId() >= 0xFFFF)
+					if (!client->IsConnected())
 					{
 						m_clientRegistry->HandleConnectingClient(client);
 
@@ -1113,7 +1113,7 @@ namespace fx
 		MonoEnsureThreadAttached();
 
 		// verify if the client is still using a TempID
-		bool isFinal = (client->GetNetId() < 0xFFFF);
+		bool isFinal = client->IsConnected();
 
 		// trigger a event signaling the player's drop, if final
 		if (isFinal)

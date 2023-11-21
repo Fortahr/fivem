@@ -13,7 +13,7 @@ namespace fx
 
 	void Client::SetPeer(int peer, const net::PeerAddress& peerAddress)
 	{
-		m_peer.reset(new int(peer));
+		m_peer = peer;
 		m_peerAddress = peerAddress;
 
 		OnAssignPeer();
@@ -45,10 +45,10 @@ namespace fx
 		m_lastSeen = msec();
 	}
 
-	bool Client::IsDead()
+	bool Client::IsDead() const
 	{
 		// if we've not connected yet, we can't be dead
-		if (m_netId >= 0xFFFF)
+		if (!IsConnected())
 		{
 			auto canBeDead = GetData("canBeDead");
 
@@ -71,7 +71,7 @@ namespace fx
 		return (msec() - m_lastSeen) > CLIENT_DEAD_TIMEOUT;
 	}
 
-	int Client::GetPing()
+	int Client::GetPing() const
 	{
 		fx::NetPeerStackBuffer stackBuffer;
 		gscomms_get_peer(GetPeer(), stackBuffer);
@@ -89,14 +89,9 @@ namespace fx
 	std::shared_ptr<AnyBase> Client::GetData(const std::string& key)
 	{
 		std::shared_lock _(m_userDataMutex);
+
 		auto it = m_userData.find(key);
-
-		if (it == m_userData.end())
-		{
-			return {};
-		}
-
-		return it->second;
+		return it != m_userData.end() ? it->second : nullptr;
 	}
 
 	void Client::SendPacket(int channel, const net::Buffer& buffer, NetPacketType type /* = (ENetPacketFlag)0 */)
