@@ -1351,6 +1351,8 @@ public:
 
 	fwEvent<fx::sync::SyncEntityPtr> OnEntityCreate;
 
+	fwEvent<const fx::ClientSharedPtr&> OnClientPedCreate;
+
 private:
 	fx::ServerInstanceBase* m_instance;
 

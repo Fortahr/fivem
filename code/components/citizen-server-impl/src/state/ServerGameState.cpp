@@ -3395,7 +3395,7 @@ bool ServerGameState::ProcessClonePacket(const fx::ClientSharedPtr& client, rl::
 			if (!playerEntity)
 			{
 				SendWorldGrid(nullptr, client);
-				client->OnCreatePed();
+				OnClientPedCreate(client);
 			}
 
 			data->playerEntity = entity;

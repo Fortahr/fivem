@@ -337,8 +337,6 @@ namespace fx
 
 		void SendPacket(int channel, const net::Buffer& buffer, NetPacketType flags = NetPacketType_Unreliable);
 
-		fwEvent<> OnCreatePed;
-
 	private:
 		inline void SetNetId(uint32_t netId)
 		{

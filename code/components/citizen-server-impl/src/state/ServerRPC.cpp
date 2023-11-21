@@ -70,10 +70,8 @@ static InitFunction initFunction([]()
 		auto gameState = ref->GetComponent<fx::ServerGameState>();
 		auto gameServer = ref->GetComponent<fx::GameServer>();
 
-		clientRegistry->OnClientCreated.Connect([](const fx::ClientSharedPtr& client)
 		{
-			fx::Client* unsafeClient = client.get();
-			unsafeClient->OnCreatePed.Connect([unsafeClient]()
+			gameState->OnClientPedCreate.Connect([](const fx::ClientSharedPtr& client)
 			{
 				for (auto& entry : g_replayList)
 				{
@@ -81,12 +79,12 @@ static InitFunction initFunction([]()
 					{
 						for (auto& [ native, buffer ] : entry.second)
 						{
-							unsafeClient->SendPacket(0, buffer, NetPacketType_Reliable);
+							client->SendPacket(0, buffer, NetPacketType_Reliable);
 						}
 					}
 				}
 			});
-		});
+		}
 
 		gameState->OnEntityCreate.Connect([](fx::sync::SyncEntityPtr entity)
 		{
