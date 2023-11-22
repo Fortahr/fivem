@@ -171,6 +171,12 @@ namespace fx
 		m_clientsByPeer[client->GetPeer()].reset();
 		m_clientsByPeer[peer] = client;
 
+		const auto& prevPeer = client->m_peer;
+		if (prevPeer)
+		{
+			gscomms_reset_peer(*prevPeer);
+		}
+
 		client->SetPeer(peer, peerAddress);
 
 		if (!IsOneSync())

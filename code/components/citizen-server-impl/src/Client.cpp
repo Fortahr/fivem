@@ -57,14 +57,6 @@ namespace fx
 		m_userData[key] = data;
 	}
 
-	std::shared_ptr<AnyBase> Client::GetData(const std::string& key)
-	{
-		std::shared_lock _(m_userDataMutex);
-
-		auto it = m_userData.find(key);
-		return it != m_userData.end() ? it->second : nullptr;
-	}
-
 	void Client::SendPacket(int channel, const net::Buffer& buffer, NetPacketType type /* = (ENetPacketFlag)0 */)
 	{
 		if (m_peer)

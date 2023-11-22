@@ -301,7 +301,7 @@ std::shared_ptr<GameStateClientData> ServerGameState::CreateSyncData(const fx::C
 std::shared_ptr<GameStateClientData> ServerGameState::GetOrCreateClientDataUnlocked(const fx::ClientSharedPtr& client)
 {
 	std::shared_ptr<GameStateClientData> data(std::move(client->GetSyncData()));
-	return data ? std::move(data) : CreateSyncData(client);
+	return data ? data : CreateSyncData(client);
 }
 
 std::tuple<std::unique_lock<std::mutex>, std::shared_ptr<GameStateClientData>> ServerGameState::GetOrCreateClientData(const fx::ClientSharedPtr& client)

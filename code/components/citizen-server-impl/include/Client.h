@@ -314,11 +314,11 @@ namespace fx
 
 		int GetPing() const;
 
-		std::shared_ptr<AnyBase> GetData(const std::string& key);
-
 		inline std::shared_ptr<const AnyBase> GetData(const std::string& key) const
 		{
-			return std::move(GetData(key));
+			std::shared_lock lk(m_userDataMutex);
+			auto it = m_userData.find(key);
+			return it != m_userData.end() ? it->second : nullptr;
 		}
 
 		void SetDataRaw(const std::string& key, const std::shared_ptr<AnyBase>& data);
