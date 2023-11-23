@@ -22,7 +22,7 @@ static InitFunction initFunction([]()
 	{
 		tbb::concurrent_unordered_map<std::string, bool> allowedByPolicyCache;
 
-		fx::ClientRegistry* m_registry;
+		fx::ClientRegistry* m_registry = nullptr;
 
 		virtual std::string GetIdentifierPrefix() override
 		{
@@ -41,28 +41,23 @@ static InitFunction initFunction([]()
 
 		virtual void RunAuthentication(const fx::ClientSharedPtr& clientPtr, const std::map<std::string, std::string>& postMap, const std::function<void(boost::optional<std::string>)>& cb) override
 		{
-			const auto& ep = clientPtr->GetTcpEndPoint();
-			clientPtr->AddIdentifier("ip:" + ep);
-
-			cb({});
+			const auto& currentTcpEndPoint = clientPtr->GetTcpEndPoint();
+			SetClientIdentifier(clientPtr, currentTcpEndPoint, cb);
 		}
 
 		void RunRealIPAuthentication(const fx::ClientSharedPtr& clientPtr, const fwRefContainer<net::HttpRequest>& request, const std::map<std::string, std::string>& postMap, const std::function<void(boost::optional<std::string>)>& cb, const std::string& realIP)
 		{
-			const auto& ep = clientPtr->GetTcpEndPoint();
-			bool found = fx::IsProxyAddress(ep);
+			const auto& currentTcpEndPoint = clientPtr->GetTcpEndPoint();
+			bool found = fx::IsProxyAddress(currentTcpEndPoint);
 
 			if (!found)
 			{
-				clientPtr->AddIdentifier("ip:" + ep);
+				SetClientIdentifier(clientPtr, currentTcpEndPoint, cb);
 			}
 			else
 			{
-				clientPtr->AddIdentifier("ip:" + realIP);
-				m_registry->SetClientTcpEndPoint(clientPtr, realIP);
+				SetClientTcpAddress(clientPtr, realIP, cb);
 			}
-
-			cb({});
 		}
 
 		virtual void RunAuthentication(const fx::ClientSharedPtr& clientPtr, const fwRefContainer<net::HttpRequest>& request, const std::map<std::string, std::string>& postMap, const std::function<void(boost::optional<std::string>)>& cb) override
@@ -80,28 +75,18 @@ static InitFunction initFunction([]()
 				return RunRealIPAuthentication(clientPtr, request, postMap, cb, realIP);
 			}
 
-			auto doAccept = [sourceIP, clientPtr, cb]()
-			{
-				auto rSourceIP = sourceIP.substr(0, sourceIP.find_last_of(':'));
-
-				clientPtr->AddIdentifier("ip:" + rSourceIP);
-				clientPtr->GetRegistry().SetClientTcpEndPoint(clientPtr, rSourceIP);
-
-				cb({});
-			};
-
 			auto clep = clientPtr->GetTcpEndPoint();
 
 			auto it = allowedByPolicyCache.find(clep);
 
 			if (it != allowedByPolicyCache.end() && it->second)
 			{
-				doAccept();
+				SetClientTcpAddress(clientPtr, sourceIP, cb);
 
 				return;
 			}
 
-			Instance<HttpClient>::Get()->DoPostRequest("https://cfx.re/api/validateSource/?v=1", { { "ip", clep } }, [this, clep, doAccept, clientPtr, cb](bool success, const char* data, size_t size)
+			Instance<HttpClient>::Get()->DoPostRequest("https://cfx.re/api/validateSource/?v=1", { { "ip", clep } }, [this, clep, sourceIP, clientPtr, cb](bool success, const char* data, size_t size)
 			{
 				bool allowSourceIP = true;
 
@@ -121,16 +106,32 @@ static InitFunction initFunction([]()
 
 				if (allowSourceIP)
 				{
-					doAccept();
+					SetClientTcpAddress(clientPtr, sourceIP, cb);
 				}
 				else
 				{
-					const auto& ep = clientPtr->GetTcpEndPoint();
-					clientPtr->AddIdentifier("ip:" + ep);
-
-					cb({});
+					const auto& currentTcpEndPoint = clientPtr->GetTcpEndPoint();
+					SetClientIdentifier(clientPtr, currentTcpEndPoint, cb);
 				}
 			});
+		}
+
+	private:
+		void SetClientIdentifier(const fx::ClientSharedPtr& client, const std::string& tcpAddress, const std::function<void(boost::optional<std::string>)>& cb)
+		{
+			client->AddIdentifier("ip:" + tcpAddress);
+
+			cb({});
+		}
+
+		void SetClientTcpAddress(const fx::ClientSharedPtr& client, const std::string& tcpEndPoint, const std::function<void(boost::optional<std::string>)>& cb)
+		{
+			auto tcpAdress = tcpEndPoint.substr(0, tcpEndPoint.find_last_of(':'));
+
+			assert(m_registry != nullptr);
+			m_registry->SetClientTcpEndPoint(client, tcpAdress);
+
+			SetClientIdentifier(client, tcpAdress, cb);
 		}
 	} idp;
 
